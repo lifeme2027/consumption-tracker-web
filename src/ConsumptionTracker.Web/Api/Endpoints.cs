@@ -233,7 +233,7 @@ public static class Endpoints
         secured.MapPost("/import", async (string? mode, string? confirm, HttpContext ctx, UserStore store) =>
         {
             var importMode = string.Equals(mode, "replace", StringComparison.OrdinalIgnoreCase) ? ImportMode.Replace : ImportMode.Merge;
-            if (importMode == ImportMode.Replace && confirm != "yes") return Bad("覆盖导入会清空现有数据，需要确认（confirm=yes）");
+            if (importMode == ImportMode.Replace && confirm != "yes") return Bad("覆盖导入会清空现有数据，需要确认（confirm=yes）", "Replace-import clears your existing data and needs confirmation (confirm=yes)");
             var limit = ctx.Features.Get<IHttpMaxRequestBodySizeFeature>();
             if (limit is { IsReadOnly: false }) limit.MaxRequestBodySize = opt.Limits.ImportBodyBytes;
             string text;
@@ -242,13 +242,15 @@ public static class Endpoints
                 using var reader = new StreamReader(ctx.Request.Body, new UTF8Encoding(false), true);
                 text = await reader.ReadToEndAsync();
             }
-            catch (BadHttpRequestException) { return Results.Json(new { error = "文件过大" }, statusCode: 413); }
-            if (string.IsNullOrWhiteSpace(text)) return Bad("内容为空");
+            catch (BadHttpRequestException) { return Results.Json(new { error = "文件过大", errorEn = "The file is too large" }, statusCode: 413); }
+            if (string.IsNullOrWhiteSpace(text)) return Bad("内容为空", "The content is empty");
 
             ImportResult parsed;
             try { parsed = text.TrimStart('\uFEFF', ' ', '\t', '\r', '\n').StartsWith('{') ? BackupService.ParseJson(text) : CsvService.Parse(text); }
+            catch (InvalidDataException e) when (ImportFormat.English(e) is { } en)
+            { return Bad(e.Message, en); }   // Core 给出的具体原因（中英文）
             catch (Exception e) when (e is FormatException or System.Text.Json.JsonException or InvalidDataException or ArgumentException or OverflowException or InvalidOperationException)
-            { return Bad("无法解析导入内容，请确认是本应用导出的 JSON 或 CSV"); }
+            { return Bad("无法解析导入内容，请确认是本应用导出的 JSON 或 CSV", "Could not read the import content; please use a JSON or CSV file exported by this app"); }
 
             var totalRows = parsed.Records.Count + parsed.Issues.Count;
             // 覆盖模式：全量预检——只要有一条不合格就整体中止，返回逐条原因，绝不清空现有数据
@@ -275,7 +277,8 @@ public static class Endpoints
 
     private static string Addr(HttpContext ctx) => (string)ctx.Items[AddressKey]!;
     private static UserRepository Repo(HttpContext ctx, UserStore store) => store.ForUser(Addr(ctx));
-    private static IResult Bad(string? msg) => Results.Json(new { error = msg ?? "请求无效" }, statusCode: 400);
+    private static IResult Bad(string? msg, string? en = null) =>
+        Results.Json(new { error = msg ?? "请求无效", errorEn = en ?? (msg is null ? "Invalid request" : null) }, statusCode: 400);
     private const int MaxIssueRows = 200;   // 响应里最多列出的行数；总数另有 rejectedCount / skipped
 
     private static object[] IssueRows(IReadOnlyList<ImportIssue> issues) =>

@@ -46,6 +46,33 @@ public class ImportRejectionTests : IDisposable
     }
 
     [Theory]
+    [InlineData("{ not json", "文件不是有效的 JSON", "The file is not valid JSON")]
+    [InlineData("{\"x\":1}", "不是本应用导出的备份文件", "not a backup file")]
+    [InlineData("日期,商品名\n2026-01-01,a", "CSV 表头缺少必需列", "missing required columns")]
+    [InlineData("   ", "内容为空", "empty")]
+    public async Task Import_UnusableFile_ReturnsSpecificBilingualReason_NotGenericParseError(string body, string zhPart, string enPart)
+    {
+        var c = await SeededAsync(1);
+        var res = await c.SendAsync(Raw("/api/import?mode=merge", body));
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+        var j = await res.J();
+        Assert.Contains(zhPart, j.GetProperty("error").GetString());
+        Assert.Contains(enPart, j.GetProperty("errorEn").GetString());
+        Assert.DoesNotContain("无法解析导入内容", j.GetProperty("error").GetString());
+    }
+
+    [Fact]
+    public async Task Import_ReplaceWithoutConfirm_IsBilingual_And_OversizeIsBilingual()
+    {
+        var c = await SeededAsync(1);
+        var res = await c.SendAsync(Raw("/api/import?mode=replace", Backup(Rec())));
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+        var j = await res.J();
+        Assert.Contains("confirm=yes", j.GetProperty("error").GetString());
+        Assert.Contains("confirm=yes", j.GetProperty("errorEn").GetString());
+    }
+
+    [Theory]
     [InlineData("note", "备注过长")]
     [InlineData("qty7", "数量最多 6 位小数")]
     [InlineData("qtyBig", "数量过大")]
