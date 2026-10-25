@@ -113,12 +113,25 @@ public static class Endpoints
         {
             var q = ToQuery(body, out var err);
             if (err != null) return Bad(err);
+            var qo = opt.Query;
+            var limit = body?.Limit ?? qo.DefaultPageSize;
+            var offset = body?.Offset ?? 0;
+            if (limit < 1 || limit > qo.MaxPageSize)
+                return Bad($"limit 必须在 1 到 {qo.MaxPageSize} 之间", $"limit must be between 1 and {qo.MaxPageSize}");
+            if (offset < 0) return Bad("offset 不能为负数", "offset must not be negative");
             var rows = Repo(ctx, store).Query(q);
+            var page = rows.Skip(offset).Take(limit).ToList();
             return Results.Ok(new
             {
-                records = rows.Select(RecordDto.From),
+                records = page.Select(RecordDto.From),
+                // count / totalCents 是全部命中记录的合计（与分页无关），旧前端不改也显示正确
                 count = rows.Count,
                 totalCents = Stats.TotalCents(rows),
+                total = rows.Count,
+                offset,
+                limit,
+                returned = page.Count,
+                hasMore = offset + page.Count < rows.Count,
             });
         });
 

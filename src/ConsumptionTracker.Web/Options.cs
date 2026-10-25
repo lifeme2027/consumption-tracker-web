@@ -10,6 +10,7 @@ public sealed class LifeOptions
     public StorageSection Storage { get; set; } = new();
     public CookieSection Cookie { get; set; } = new();
     public LimitsSection Limits { get; set; } = new();
+    public QuerySection Query { get; set; } = new();
 
     public sealed class KaspaSection
     {
@@ -47,6 +48,13 @@ public sealed class LifeOptions
         public string Name { get; set; } = "ct_session";
         /// <summary>生产必须为 true（仅 HTTPS 发送）。Development 下自动放宽。</summary>
         public bool RequireSecure { get; set; } = true;
+    }
+
+    /// <summary>记录查询分页：不带 limit 时用默认页大小；limit 上限防止一次吐出全部数据。</summary>
+    public sealed class QuerySection
+    {
+        public int DefaultPageSize { get; set; } = 2000;
+        public int MaxPageSize { get; set; } = 5000;
     }
 
     public sealed class LimitsSection

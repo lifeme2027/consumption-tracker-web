@@ -20,7 +20,7 @@ public sealed record RecordDto(
         r.Category, r.Note, r.BatchId, r.BatchName, r.Patient, r.Dosage, r.Date, r.CreatedAt);
 }
 
-public sealed record QueryRequest(string? From, string? To, string? Category, string? BatchId, string? Keyword);
+public sealed record QueryRequest(string? From, string? To, string? Category, string? BatchId, string? Keyword, int? Limit = null, int? Offset = null);
 /// <summary>撤销删除：把刚删除的记录按原样（含原 id/createdAt/批次）写回。</summary>
 public sealed record RestoreRequest(List<RecordDto>? Records);
 public sealed record IdsRequest(List<string>? Ids);
