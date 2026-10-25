@@ -106,4 +106,21 @@ public class LocalModeFrontendTests : IDisposable
         Assert.Contains("没有端到端加密", html);
         Assert.Contains("不承诺匿名", html);
     }
+
+    /// <summary>本地条码记忆：app.js 的条码框要同时处理回车（扫码枪）与 change（手动输入后 Tab/失焦），文案三端一致；隐私页说明只存本地。</summary>
+    [Fact]
+    public async Task BarcodeMemory_WiredToEnterAndChange_WithConsistentHints_AndPrivacyNote()
+    {
+        var js = await Get("/app.js");
+        Assert.Contains("$('fBarcode').addEventListener('keydown'", js);
+        Assert.Contains("$('fBarcode').addEventListener('change'", js);
+        Assert.Contains("lastLookedCode", js);                                  // 回车与失焦共用，避免重复查询/覆盖用户改动
+        Assert.Contains("已带出上次的名称、分类、价格，请核对。", js);
+        Assert.Contains("新条码，请填写名称和价格。", js);
+        var zh = await Get("/privacy.html");
+        Assert.Contains("条码记忆", zh);
+        Assert.Contains("不发送到服务器", zh);
+        var en = await Get("/privacy-en.html");
+        Assert.Contains("Barcode memory", en);
+    }
 }

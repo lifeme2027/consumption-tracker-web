@@ -233,4 +233,62 @@ test('M-1 文案：一键删除的提示与确认框如实说明（云端 secure
   await p.close();
 });
 
+/** 条码记忆（本地模式）：保存带条码记录 → 重置表单 → 再输入同一条码（回车 / Tab 失焦）→ 名称/分类/单价自动出现、可改、可保存；未知条码保持手动。 */
+async function typeBarcode(p, code, key) {
+  await p.$eval('#recForm', (f) => { f.reset(); document.getElementById('fDate').value = '2026-10-25'; document.getElementById('fQty').value = '1'; });
+  await p.evaluate(() => document.getElementById('clearBtn').click());   // 真正走「重置」按钮（会清 lastLookedCode）
+  await p.click('#fBarcode'); await p.type('#fBarcode', code); await p.keyboard.press(key);
+  await sleep(300);
+}
+const val = (p, sel) => p.$eval(sel, (e) => e.value);
+test('条码记忆（本地模式）：保存后再扫同一条码，回车 / Tab 都自动带出名称、分类、价格，可改可存；未知条码保持手动', async () => {
+  const p = await newPage();
+  assert.match(await text(p, '#modeBadge'), /本地/);
+  const code = '69' + Date.now();
+  // ① 第一次：手填并保存（分类选「食品」，单价 3.50）
+  await p.type('#fBarcode', code); await p.keyboard.press('Enter'); await sleep(300);
+  assert.match(await text(p, '#lookupHint'), /新条码，请填写/, '没有历史应提示新条码');
+  assert.strictEqual(await val(p, '#fName'), '', '未命中不应自动填名称');
+  await p.type('#fName', '记忆咖啡'); await p.type('#fPrice', '3.5');
+  await p.select('#fCategory', '食品');
+  await p.$eval('#fDate', (e) => { e.value = '2026-10-25'; });
+  await p.click('#saveBtn');
+  for (let i = 0; i < 30 && !/已保存/.test(await text(p, '#formMsg')); i++) await sleep(100);
+  assert.match(await text(p, '#formMsg'), /已保存/);
+  let expName = '记忆咖啡', expPrice = '3.50';   // 每轮保存后，下一轮应带出的是「最近一次保存」的值
+  for (const key of ['Enter', 'Tab']) {
+    // ② 重置后 ③ 再输入同一条码
+    await typeBarcode(p, code, key);
+    assert.strictEqual(await val(p, '#fName'), expName, key + ' 应带出名称');
+    assert.strictEqual(await val(p, '#fPrice'), expPrice, key + ' 应带出价格');
+    assert.strictEqual(await val(p, '#fCategory'), '食品', key + ' 应带出分类');
+    assert.match(await text(p, '#lookupHint'), /已带出上次的名称、分类、价格，请核对/);
+    // 可修改并保存；Tab 之后再失焦不应再次覆盖用户的修改
+    await p.$eval('#fName', (e) => { e.value = ''; }); await p.type('#fName', '记忆咖啡' + key);
+    await p.$eval('#fPrice', (e) => { e.value = ''; }); await p.type('#fPrice', key === 'Enter' ? '4' : '4.25');
+    await p.click('#fQty'); await p.click('#fNote'); await sleep(200);
+    assert.strictEqual(await val(p, '#fName'), '记忆咖啡' + key, '失焦不应覆盖用户已改内容');
+    await p.click('#saveBtn'); await sleep(300);
+    assert.match(await text(p, '#dlgBody'), /重复登记提醒|已登记过相同编码/);      // 同条码同日已有记录：既有的重复提醒，点「仍然保存」
+    await clickBtn(p, '仍然保存');
+    for (let i = 0; i < 30 && !/已保存/.test(await text(p, '#formMsg')); i++) await sleep(100);
+    assert.match(await text(p, '#formMsg'), /已保存/, key + ' 修改后保存应成功');
+    expName = '记忆咖啡' + key; expPrice = key === 'Enter' ? '4.00' : '4.25';
+  }
+  // 最近一次保存（Tab 轮：名称「记忆咖啡Tab」，价格 4.25）成为新的记忆
+  await typeBarcode(p, code, 'Enter');
+  assert.strictEqual(await val(p, '#fName'), '记忆咖啡Tab'); assert.strictEqual(await val(p, '#fPrice'), '4.25');
+  // ④ 未知条码：保持手动、不清空已输入内容、不报错
+  await p.$eval('#fName', (e) => { e.value = ''; }); await p.type('#fName', '手填的名称');
+  await p.$eval('#fBarcode', (e) => { e.value = ''; }); await p.type('#fBarcode', 'unknown-' + Date.now()); await p.keyboard.press('Tab'); await sleep(300);
+  assert.match(await text(p, '#lookupHint'), /新条码，请填写/);
+  assert.strictEqual(await val(p, '#fName'), '手填的名称', '未命中不清空用户已输入内容');
+  assert.deepStrictEqual(p.apiCalls, [], '条码记忆在本地模式不发任何 /api 请求');
+  // 清理：删掉本用例的记录，避免影响其它用例的行数断言
+  await openHistory(p);
+  await p.$eval('#qKeyword', (e) => { e.value = '记忆咖啡'; }); await p.keyboard.press('Enter'); await sleep(300);
+  await p.click('#selAll'); await p.click('#bulkDelete'); await sleep(200); await clickBtn(p, '删除'); await waitRows(p, 0, '条码记忆用例清理');
+  await p.close();
+});
+
 test('整个过程没有页面脚本错误', () => { assert.deepStrictEqual(errors, []); });

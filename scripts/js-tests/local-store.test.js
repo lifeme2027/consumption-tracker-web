@@ -61,6 +61,25 @@ test('统一上限：每个字段恰好到上限通过、多 1 被拒', async ()
   await assert.rejects(() => s.add(rec({ quantity: 1.1234567 })), /6 位小数/);
 });
 
+test('条码记忆：第一次保存后能查到；再次保存取最新名称/分类/单价；未知条码与无条码记录不入库', async () => {
+  const s = await openStore();
+  assert.deepStrictEqual(await s.lookup('6900001'), { found: false, name: '', category: '', lastPriceCents: null });   // 没有历史 → 手动填写
+  await s.add(rec({ barcode: ' 6900001 ', name: '可乐', category: '饮料', priceCents: 350 }));                      // 条码前后空白被裁掉
+  assert.deepStrictEqual(await s.lookup('6900001'), { found: true, name: '可乐', category: '饮料', lastPriceCents: 350 });
+  assert.deepStrictEqual(await s.lookup(' 6900001  '), { found: true, name: '可乐', category: '饮料', lastPriceCents: 350 });
+  await s.add(rec({ barcode: '6900001', name: '可乐 500ml', category: '食品', priceCents: 0 }));                    // 免费(0 分)也是有效的上次价格
+  assert.deepStrictEqual(await s.lookup('6900001'), { found: true, name: '可乐 500ml', category: '食品', lastPriceCents: 0 });
+  const e = await s.add(rec({ barcode: '6900002', name: '雪碧', category: '饮料', priceCents: 300 }));
+  await s.update(e.id, rec({ barcode: '6900002', name: '雪碧 330ml', category: '饮料', priceCents: 320 }));            // 编辑保存同样更新记忆
+  assert.deepStrictEqual(await s.lookup('6900002'), { found: true, name: '雪碧 330ml', category: '饮料', lastPriceCents: 320 });
+  await s.add(rec({ name: '无条码商品', priceCents: 100 }));
+  assert.strictEqual((await s.lookup('')).found, false);
+  assert.strictEqual((await s.lookup('   ')).found, false);
+  assert.strictEqual((await s.lookup('无条码商品')).found, false);
+  const exp = JSON.parse(await s.exportJson());
+  assert.deepStrictEqual(exp.products.map((p) => p.barcode).sort(), ['6900001', '6900002']);                           // 只含有条码的商品
+});
+
 test('商品记忆、重复提醒、批次、撤销删除（原 id/createdAt/批次不变）', async () => {
   const s = await openStore();
   const a = await s.add(rec({ barcode: '6902', category: '饮料', priceCents: 777, batchName: '甲' }));
