@@ -26,7 +26,16 @@
 <li><strong>Barcode memory</strong>: when you save a record with a barcode, the browser remembers that barcode&rsquo;s name, category and latest price in its local IndexedDB; the next time you type or scan the same barcode these are filled in automatically (you can change them). This memory stays in your browser and is not sent to the server; &ldquo;Delete all data&rdquo; on the Data tab removes it too, and your exported JSON backup includes it.</li>
 <li><strong>Medication names, the person taking the medication, doses and notes are health-related sensitive information.</strong> In Local mode they exist only in your browser: there is no account, no session, and this site holds no copy. JSON / CSV files you export are <strong>not encrypted</strong>; keep them safe.</li>
 <li><strong>Deleting locally</strong>: &ldquo;Delete all data&rdquo; on the Data tab removes the data from the browser&rsquo;s IndexedDB. The browser&rsquo;s storage engine and the disk underneath may keep fragments of deleted content for some time, which we cannot control. Export files you already downloaded and data in other browsers or on other devices are not deleted.</li>
-<li>Local mode has no account and no session, so session lifetime and server backups do not apply. Opening the page only requests the page files themselves (see &ldquo;Server access logs&rdquo; below).</li>
+<li>Local mode has no account and no session, so session lifetime and server backups do not apply. Opening the page only requests the page files themselves (see &ldquo;Server access logs&rdquo; below). The one exception is the optional barcode lookup described under &ldquo;Product catalog lookup&rdquo; (it can be switched off).</li>
+</ul>
+
+<h2>Product catalog lookup (optional switch, on by default)</h2>
+<ul>
+<li>This site can be configured with a read-only product catalog. <strong>When &ldquo;Look up the product catalog&rdquo; is on</strong> (a setting on the Data tab, on by default; your browser remembers the choice), <strong>the barcode you scan or type is sent to this site&rsquo;s server</strong>, only to query the catalog; the name, category and reference sale price that come back are filled into the form (you can change them all).</li>
+<li><strong>Only the barcode is sent</strong> &mdash; none of your records, names, prices, notes, person, dose or other data. The request carries no sign-in cookie, in Local and Cloud mode alike. The barcode travels in the request body, not in the URL.</li>
+<li>The server <strong>neither logs nor stores</strong> the barcode: it is not in the application or error logs and is not written to any database or file; the catalog is opened read-only. The IIS access log still shows the fact that an IP address called the lookup endpoint at a given time, but not the barcode (it is in the request body, not the URL).</li>
+<li><strong>When the switch is off the page sends no barcode lookups at all</strong>; registering then uses only the barcode memory on your own device &mdash; fully offline. In Local mode all other data always stays on your device.</li>
+<li>If no catalog is configured, the network is unreachable or the barcode is not found, the page silently falls back to the local barcode memory and then to manual entry.</li>
 </ul>
 
 <h2>Cloud mode (optional, after signing in with a Kaspa wallet)</h2>
@@ -66,9 +75,9 @@
 <h2>Server access logs (IIS logs)</h2>
 <ul>
 <li>In either mode, opening this site makes the IIS web server in front of the application write ordinary access logs: <strong>time, your IP address, the requested URL path, status code and your browser&rsquo;s User-Agent</strong>.</li>
-<li>These logs <strong>do not contain your record content</strong> (names, notes, person, dose, etc.): that is sent in request bodies, and keyword search also uses the request body, never the URL. They can show that an IP address visited the site or called an endpoint at a given time.</li>
+<li>These logs <strong>do not contain your record content</strong> (names, notes, person, dose, etc.) or the barcodes of catalog lookups: that is sent in request bodies, and keyword search also uses the request body, never the URL. They can show that an IP address visited the site or called an endpoint at a given time.</li>
 <li>IIS logs are likewise <strong>cleaned up by the administrator by hand; we do not promise automatic cleanup or any specific retention period.</strong></li>
-<li>In Local mode the page itself submits no records to this site, so the logs only show requests for the page files.</li>
+<li>In Local mode the page itself submits no records to this site, so the logs only show requests for the page files; if &ldquo;Look up the product catalog&rdquo; is on, each barcode lookup adds one request line for the lookup endpoint (time, IP, path and status only &mdash; no barcode).</li>
 </ul>
 
 <h2>Sign-in and keys</h2>
@@ -80,7 +89,7 @@
 </ul>
 
 <h2>Application logs</h2>
-<p>The application&rsquo;s own log records warnings and above only, and never record content (names, notes, person, dose, batch). Keyword search uses the request body, so it never appears in a URL. See the IIS logs section above for web-server logs.</p>
+<p>The application&rsquo;s own log records warnings and above only, and never record content (names, notes, person, dose, batch) or catalog-lookup barcodes (not even at the most verbose log level). Keyword search uses the request body, so it never appears in a URL. See the IIS logs section above for web-server logs.</p>
 
 <h2>Your controls</h2>
 <ul>
@@ -89,7 +98,7 @@
 </ul>
 
 <h2>Other</h2>
-<p>The page loads no external scripts, fonts or analytics, and the browser content security policy (CSP) only allows connections to this site (in Local mode the page does not submit records even to this site). The QR scanner is a local component served with the site; the camera image is processed only in your browser and is never uploaded.</p>
+<p>The page loads no external scripts, fonts or analytics, and the browser content security policy (CSP) only allows connections to this site (in Local mode the page does not submit records even to this site; only when catalog lookup is on does it send the barcode to this site to query it). The QR scanner is a local component served with the site; the camera image is processed only in your browser and is never uploaded.</p>
 </section>
 </main>
 </body>

@@ -47,7 +47,7 @@ IIS 下默认环境为 `Production`（不要设置 `ASPNETCORE_ENVIRONMENT=Devel
       "VacuumHours": 24
     },
     "Cookie": { "Name": "ct_session", "RequireSecure": true },
-    "Limits": { "ChallengePerMinute": 10, "VerifyPerMinute": 20, "ApiPerMinute": 300 }
+    "Limits": { "ChallengePerMinute": 10, "VerifyPerMinute": 20, "ApiPerMinute": 300, "CatalogPerMinute": 600 }
   }
 }
 ```
@@ -59,6 +59,33 @@ IIS 下默认环境为 `Production`（不要设置 `ASPNETCORE_ENVIRONMENT=Devel
 - `Storage:DataDir`：相对路径相对于站点目录；也可改成绝对路径（如 `D:\WebData\life`），并给该目录同样的写权限——这样升级时更不容易误删。
 - `Storage:CheckpointMinutes`（默认 60）：每隔多少分钟把 SQLite 预写日志（WAL）并回主库并截断；`Storage:VacuumHours`（默认 24）：每隔多少小时对库做一次 VACUUM。上次 VACUUM 的时间记在 `App_Data\life.db.vacuumed` 标记文件的修改时间里，所以 IIS 回收 / 重启不会让它从头计时——**不要删这个文件**。设为 0 会关闭对应维护，**不建议**（隐私页写明了这两项）。数据库连接始终开启 `secure_delete`（被删内容擦零）。
 - 所有设置也可用环境变量覆盖（双下划线分隔，如 `Life__Auth__SessionHours=8`）。
+
+## 商品库（可选，条码查询）
+
+扫码后先查商品库，没有再用本机历史记忆，最后手动填写。商品库是**只读**的 SQLite 文件 `catalog.db`，由桌面版仓库里的 CatalogConverter 从 xlsx 转出：
+
+```
+CatalogConverter 商品库.xlsx catalog.db
+```
+
+（源码与用法见桌面版仓库 `composehk/consumption-tracker-desktop` 的 `tools/CatalogConverter/` 和该仓库 README；转换在你自己的电脑上做，xlsx 不需要上传到服务器；Windows 单文件 exe 用该目录下的 `./publish.sh` 生成，Windows 示例：`CatalogConverter.exe "D:\Web\data\商品库240325.xlsx" "D:\Web\data\catalog.db" --verify`，已存在需加 `--overwrite`。）
+
+1. 把转好的 `catalog.db` 放到 **`D:\Web\data\catalog.db`**。它在站点目录 `D:\Web\life` **之外**，所以升级（覆盖站点目录）不会影响它；要更新商品库，直接替换这个文件即可（每次查询都重新打开文件，不需要重启站点）。
+2. 在 `D:\Web\life\appsettings.Production.json` 里加上（该文件不在发布包内，升级时用 `robocopy ... /XF appsettings.Production.json` 也不会被覆盖）：
+
+```json
+{
+  "Life": {
+    "Catalog": { "Path": "D:\\Web\\data\\catalog.db" }
+  }
+}
+```
+
+   也可用环境变量 `Life__Catalog__Path`。`Path` 留空（默认）= 不启用商品库，接口返回 `available:false`，页面自动回退到本机记忆。
+3. **权限：给 IIS 应用程序池身份（`IIS AppPool\<池名>`）对 `catalog.db` 授予"读取"权限即可**（只读，不需要写权限，也不要给写权限；程序以 `Mode=ReadOnly` 打开，不会创建 `-wal`/`-journal` 文件）。
+4. 接口：`POST /api/catalog/lookup`，请求体 `{"barcode":"..."}`。**必须是 POST**：条码在请求体里，不会出现在网址，所以 IIS 日志里没有条码。程序**不记录**条码（应用日志含 Debug 级别也不含，测试覆盖），也不写任何库。返回只含名称、分类、单位、规格、参考售价，**不含进价和产地**。不需要登录，也不使用 Cookie；有独立的限流（`Life:Limits:CatalogPerMinute`，默认 600 次/分钟/IP）。
+5. 验证：`curl -X POST https://life.kastop.com/api/catalog/lookup -H "Content-Type: application/json" -H "X-Requested-With: life-web" -d "{\"barcode\":\"<条码>\"}"`（同源 Origin 检查通过的浏览器请求同理）。返回 `available:true` 表示库已就绪。
+6. 隐私：用户可在页面「数据」页关闭「查询商品库」，关闭后页面不发送任何条码查询请求。隐私页已如实说明这一点。商品库内容属于私有数据：不要放进站点目录、发布包或代码仓库。
 
 ## 域名 / HTTPS / Cookie
 
