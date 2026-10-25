@@ -107,7 +107,7 @@ public static class CsvService
     public static ImportResult Parse(string text)
     {
         var rows = ParseRows(text);
-        if (rows.Count == 0) throw new InvalidDataException("CSV 文件为空");
+        if (rows.Count == 0) throw ImportFormat.Error("CSV 文件为空", "The CSV file is empty");
         var header = rows[0].Select(h => h.Trim()).ToList();
         int Col(params string[] names) => header.FindIndex(h => names.Contains(h));
         var cDate = Col("日期");
@@ -115,7 +115,7 @@ public static class CsvService
         var cPrice = Col("单价", "价格");
         var cQty = Col("数量");
         if (cDate < 0 || cName < 0 || cPrice < 0 || cQty < 0)
-            throw new InvalidDataException("CSV 表头缺少必需列：日期、商品名、单价、数量");
+            throw ImportFormat.Error("CSV 表头缺少必需列：日期、商品名、单价、数量", "The CSV header is missing required columns: date, name, price, quantity (日期, 商品名, 单价, 数量)");
         var cBarcode = Col("条码/追溯码", "条码", "编码");
         var cCat = Col("分类");
         var cBatchName = Col("批次/药方", "批次名", "批次");

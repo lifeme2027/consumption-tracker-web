@@ -82,10 +82,10 @@ public static class BackupService
     {
         JsonNode? root;
         try { root = JsonNode.Parse(text.TrimStart('\uFEFF')); }
-        catch (JsonException) { throw new InvalidDataException("文件不是有效的 JSON"); }
+        catch (JsonException) { throw ImportFormat.Error("文件不是有效的 JSON", "The file is not valid JSON"); }
 
         if (root is not JsonObject obj || Str(obj["app"]) != AppId || obj["records"] is not JsonArray recs)
-            throw new InvalidDataException("不是本应用导出的备份文件");
+            throw ImportFormat.Error("不是本应用导出的备份文件", "This is not a backup file exported by this app");
 
         var records = new List<RecordItem>();
         var issues = new List<ImportIssue>();

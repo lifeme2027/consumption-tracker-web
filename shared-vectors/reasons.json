@@ -1,0 +1,118 @@
+[
+ {
+  "zh": "记录内容无效（不是对象）",
+  "en": "Invalid record (not an object)"
+ },
+ {
+  "zh": "记录内容无效",
+  "en": "Invalid record"
+ },
+ {
+  "zh": "商品名不能为空",
+  "en": "Name is required"
+ },
+ {
+  "zh": "价格不能为负数",
+  "en": "Price cannot be negative"
+ },
+ {
+  "zh": "价格为空",
+  "en": "Price is empty"
+ },
+ {
+  "zh": "价格过大",
+  "en": "Price too large (max 1,000,000,000 yuan)"
+ },
+ {
+  "zh": "价格过大（最多 10 亿元）",
+  "en": "Price too large (max 1,000,000,000 yuan)"
+ },
+ {
+  "zh": "价格无效（需为不小于 0 的数字，小数请用小数点，如 12.50）",
+  "en": "Invalid price (a number not less than 0; use a decimal point, e.g. 12.50)"
+ },
+ {
+  "zh": "缺少有效的价格（priceCents 或 price）",
+  "en": "Missing or invalid price (priceCents or price)"
+ },
+ {
+  "zh": "数量为空",
+  "en": "Quantity is empty"
+ },
+ {
+  "zh": "数量必须大于 0",
+  "en": "Quantity must be greater than 0"
+ },
+ {
+  "zh": "数量过大",
+  "en": "Quantity too large (max 1,000,000)"
+ },
+ {
+  "zh": "数量过大（最多 1000000）",
+  "en": "Quantity too large (max 1,000,000)"
+ },
+ {
+  "zh": "数量最多 6 位小数",
+  "en": "Quantity allows at most 6 decimal places"
+ },
+ {
+  "zh": "数量无效（需大于 0，最多 6 位小数，不超过 1000000）",
+  "en": "Invalid quantity (greater than 0, at most 6 decimal places, not more than 1000000)"
+ },
+ {
+  "zh": "缺少有效的数量",
+  "en": "Missing or invalid quantity"
+ },
+ {
+  "zh": "日期格式应为 YYYY-MM-DD",
+  "en": "Date must be YYYY-MM-DD"
+ },
+ {
+  "zh": "记录 ID 过长",
+  "en": "Record ID too long (max 64 characters)"
+ },
+ {
+  "zh": "编码过长",
+  "en": "Barcode too long (max 64 characters)"
+ },
+ {
+  "zh": "名称过长（最多 100 字）",
+  "en": "Name too long (max 100 characters)"
+ },
+ {
+  "zh": "分类过长",
+  "en": "Category too long (max 30 characters)"
+ },
+ {
+  "zh": "备注过长（最多 1000 字）",
+  "en": "Note too long (max 1000 characters)"
+ },
+ {
+  "zh": "批次名过长",
+  "en": "Batch name too long (max 60 characters)"
+ },
+ {
+  "zh": "用药人过长",
+  "en": "Patient too long (max 40 characters)"
+ },
+ {
+  "zh": "剂量/规格过长",
+  "en": "Dosage/spec too long (max 60 characters)"
+ },
+ {
+  "zh": "编码过长（最多 64 字）",
+  "en": "Barcode too long (max 64 characters)"
+ },
+ {
+  "zh": "批次名过长（最多 60 字）",
+  "en": "Batch name too long (max 60 characters)"
+ },
+ {
+  "zh": "用药人过长（最多 40 字）",
+  "en": "Patient too long (max 40 characters)"
+ },
+ {
+  "zh": "剂量/规格过长（最多 60 字）",
+  "en": "Dosage/spec too long (max 60 characters)"
+ }
+]

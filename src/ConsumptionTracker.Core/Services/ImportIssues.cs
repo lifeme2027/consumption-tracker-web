@@ -38,3 +38,20 @@ public sealed class ImportRejectedException : InvalidOperationException
         return issues;
     }
 }
+
+/// <summary>
+/// 导入文件整体不可用（不是本应用的备份、缺少必需列等）时抛出的异常：类型仍是 InvalidDataException（中文消息），
+/// 英文消息放在 Data["en"]，调用方用 <see cref="English"/> 取出。
+/// </summary>
+public static class ImportFormat
+{
+    public static InvalidDataException Error(string zh, string en)
+    {
+        var e = new InvalidDataException(zh);
+        e.Data["en"] = en;
+        return e;
+    }
+
+    /// <summary>异常的英文消息；没有则返回 null。</summary>
+    public static string? English(Exception e) => e.Data["en"] as string;
+}
