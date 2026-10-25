@@ -2,6 +2,7 @@ using System.Threading.RateLimiting;
 using ConsumptionTracker.Web;
 using ConsumptionTracker.Web.Api;
 using ConsumptionTracker.Web.Auth;
+using ConsumptionTracker.Web.Catalog;
 using ConsumptionTracker.Web.Storage;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -25,6 +26,7 @@ builder.Services.AddSingleton(sp =>
     var dir = Path.IsPathRooted(options.Storage.DataDir) ? options.Storage.DataDir : Path.Combine(env.ContentRootPath, options.Storage.DataDir);
     return new Database(Path.Combine(dir, options.Storage.DatabaseFile));
 });
+builder.Services.AddSingleton(sp => new CatalogLookup(options.Catalog.Path, sp.GetRequiredService<IWebHostEnvironment>().ContentRootPath));
 builder.Services.AddSingleton<UserStore>();
 builder.Services.AddSingleton<MaintenanceService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<MaintenanceService>());
@@ -54,6 +56,7 @@ builder.Services.AddRateLimiter(rl =>
     rl.AddPolicy("challenge", c => Win(c, "c:", options.Limits.ChallengePerMinute));
     rl.AddPolicy("verify", c => Win(c, "v:", options.Limits.VerifyPerMinute));
     rl.AddPolicy("api", c => Win(c, "a:", options.Limits.ApiPerMinute));
+    rl.AddPolicy("catalog", c => Win(c, "k:", options.Limits.CatalogPerMinute));
 });
 
 var app = builder.Build();

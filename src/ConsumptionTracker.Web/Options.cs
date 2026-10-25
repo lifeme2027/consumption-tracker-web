@@ -11,6 +11,7 @@ public sealed class LifeOptions
     public CookieSection Cookie { get; set; } = new();
     public LimitsSection Limits { get; set; } = new();
     public QuerySection Query { get; set; } = new();
+    public CatalogSection Catalog { get; set; } = new();
 
     public sealed class KaspaSection
     {
@@ -57,11 +58,19 @@ public sealed class LifeOptions
         public int MaxPageSize { get; set; } = 5000;
     }
 
+    /// <summary>只读商品库（可选）。Path 为空 = 关闭（/api/catalog/lookup 返回 available:false）。库文件应放在站点目录之外（如 D:\Web\data\catalog.db），升级不受影响。</summary>
+    public sealed class CatalogSection
+    {
+        public string Path { get; set; } = "";
+    }
+
     public sealed class LimitsSection
     {
         public int ChallengePerMinute { get; set; } = 10;
         public int VerifyPerMinute { get; set; } = 20;
         public int ApiPerMinute { get; set; } = 300;
+        /// <summary>商品库查询单独一档（扫码枪连续扫描时请求较多）。</summary>
+        public int CatalogPerMinute { get; set; } = 600;
         public int DefaultBodyBytes { get; set; } = 64 * 1024;
         public int ImportBodyBytes { get; set; } = 5 * 1024 * 1024;
     }
