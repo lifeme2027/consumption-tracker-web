@@ -128,12 +128,20 @@ public static class CsvService
         string GetText(List<string> r, int c) => UnguardText(Get(r, c));
 
         var records = new List<RecordItem>();
-        var skipped = 0;
+        var issues = new List<ImportIssue>();
         var seen = new Dictionary<string, int>();
+        var rowNo = 1;   // 表头是第 1 行
         foreach (var r in rows.Skip(1))
         {
+            rowNo++;
             if (!Money.TryParseYuan(Get(r, cPrice), out var cents) || !Money.TryParseQuantity(Get(r, cQty), out var qty))
-            { skipped++; continue; }
+            {
+                var ps = new List<RuleProblem>();
+                if (Money.PriceProblem(Get(r, cPrice)) is { } pp) ps.Add(pp);
+                if (Money.QuantityProblem(Get(r, cQty)) is { } qp) ps.Add(qp);
+                issues.Add(ImportIssue.Csv(rowNo, RecordValidator.Join(ps)));
+                continue;
+            }
             var batchName = GetText(r, cBatchName).Trim();
             var batchId = GetText(r, cBatchId).Trim();
             if (batchId == "" && batchName != "") batchId = "batch-" + Hash("batch|" + batchName)[..16];
@@ -152,14 +160,14 @@ public static class CsvService
                 Dosage = GetText(r, cDosage),
                 Date = GetText(r, cDate).Trim(),
             };
-            var clean = RecordValidator.Sanitize(draft);
-            if (clean == null) { skipped++; continue; }
+            var clean = RecordValidator.SanitizeChecked(draft, out var problems);
+            if (clean == null) { issues.Add(ImportIssue.Csv(rowNo, RecordValidator.Join(problems))); continue; }
             var key = string.Join("\u001f", clean.Date, clean.Barcode, clean.Name, clean.PriceCents, clean.Quantity,
                 clean.Category, clean.BatchId, clean.Patient, clean.Dosage, clean.Note);
             seen[key] = seen.TryGetValue(key, out var n) ? n + 1 : 0;
             records.Add(clean with { Id = "csv-" + Hash(key + "#" + seen[key])[..32] });
         }
-        return new ImportResult(records, new List<Product>(), skipped);
+        return new ImportResult(records, new List<Product>(), issues.Count) { Issues = issues };
     }
 
     private static string Hash(string s) =>

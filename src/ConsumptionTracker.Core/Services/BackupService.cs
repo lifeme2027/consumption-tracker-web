@@ -6,7 +6,13 @@ using ConsumptionTracker.Core.Models;
 
 namespace ConsumptionTracker.Core.Services;
 
-public sealed record ImportResult(List<RecordItem> Records, List<Product> Products, int Skipped);
+/// <summary>
+/// 解析结果：Records 只含通过完整校验的记录；被拒绝的行在 Issues 里带行号与具体原因（Skipped == Issues.Count）。
+/// </summary>
+public sealed record ImportResult(List<RecordItem> Records, List<Product> Products, int Skipped)
+{
+    public List<ImportIssue> Issues { get; init; } = new();
+}
 
 /// <summary>
 /// JSON 备份：与手机版 BackupFile 兼容（app='consumption-tracker'，version=2）。
@@ -82,11 +88,13 @@ public static class BackupService
             throw new InvalidDataException("不是本应用导出的备份文件");
 
         var records = new List<RecordItem>();
-        var skipped = 0;
+        var issues = new List<ImportIssue>();
+        var row = 0;
         foreach (var n in recs)
         {
-            var r = n is JsonObject o ? ParseRecord(o) : null;
-            if (r != null) records.Add(r); else skipped++;
+            row++;
+            var (r, bad) = ParseRecord(n);
+            if (r != null) records.Add(r); else issues.Add(ImportIssue.Json(row, bad!.Value));
         }
 
         var products = new List<Product>();
@@ -94,16 +102,27 @@ public static class BackupService
             foreach (var n in ps)
                 if (n is JsonObject o && ParseProduct(o) is { } p) products.Add(p);
 
-        return new ImportResult(records, products, skipped);
+        return new ImportResult(records, products, issues.Count) { Issues = issues };
     }
 
-    private static RecordItem? ParseRecord(JsonObject o)
+    private static (RecordItem?, RuleProblem?) ParseRecord(JsonNode? node)
     {
+        if (node is not JsonObject o) return (null, new("记录内容无效（不是对象）", "Invalid record (not an object)"));
         long priceCents;
-        if (TryNumber(o["priceCents"], out var pc) && pc >= 0) priceCents = (long)Math.Round(pc, MidpointRounding.AwayFromZero);
-        else if (TryNumber(o["price"], out var py) && py >= 0) priceCents = Money.ToCents(py);
-        else return null;
-        if (!TryNumber(o["quantity"], out var qty)) return null;
+        if (TryNumber(o["priceCents"], out var pc) && pc >= 0)
+        {
+            if (pc > RecordLimits.MaxPriceCents) return (null, TooBigPrice);
+            priceCents = (long)Math.Round(pc, MidpointRounding.AwayFromZero);
+        }
+        else if (TryNumber(o["price"], out var py) && py >= 0)
+        {
+            if (py > 10_000_000_000m) return (null, TooBigPrice);   // 远超上限，同时避免 ×100 溢出
+            priceCents = Money.ToCents(py);
+        }
+        else if (TryNumber(o["priceCents"], out _) || TryNumber(o["price"], out _))
+            return (null, new("价格不能为负数", "Price cannot be negative"));
+        else return (null, new("缺少有效的价格（priceCents 或 price）", "Missing or invalid price (priceCents or price)"));
+        if (!TryNumber(o["quantity"], out var qty)) return (null, new("缺少有效的数量", "Missing or invalid quantity"));
 
         var raw = new RecordItem
         {
@@ -119,10 +138,13 @@ public static class BackupService
             Patient = Str(o["patient"]),
             Dosage = Str(o["dosage"]),
             Date = Str(o["date"]),
-            CreatedAt = TryNumber(o["createdAt"], out var ca) ? (long)ca : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            CreatedAt = TryNumber(o["createdAt"], out var ca) && Math.Abs(ca) < 9e18m ? (long)ca : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
         };
-        return RecordValidator.Sanitize(raw);
+        var clean = RecordValidator.SanitizeChecked(raw, out var problems);
+        return clean != null ? (clean, null) : (null, RecordValidator.Join(problems));
     }
+
+    private static readonly RuleProblem TooBigPrice = new("价格过大（最多 10 亿元）", "Price too large (max 1,000,000,000 yuan)");
 
     private static Product? ParseProduct(JsonObject o)
     {
@@ -137,7 +159,7 @@ public static class BackupService
             Name = Str(o["name"]).Trim(),
             Category = Str(o["category"]).Trim(),
             LastPriceCents = last,
-            UpdatedAt = TryNumber(o["updatedAt"], out var u) ? (long)u : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            UpdatedAt = TryNumber(o["updatedAt"], out var u) && Math.Abs(u) < 9e18m ? (long)u : DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
         };
     }
 
@@ -157,7 +179,12 @@ public static class BackupService
         value = 0;
         if (n is not JsonValue v) return false;
         if (v.TryGetValue<decimal>(out value)) return true;
-        if (v.TryGetValue<double>(out var d) && double.IsFinite(d)) { value = (decimal)d; return true; }
+        if (v.TryGetValue<double>(out var d) && double.IsFinite(d))
+        {
+            // 超出 decimal 范围时取饱和值（后续按「过大/为负」给出具体原因，而不是抛 OverflowException）
+            value = d >= (double)decimal.MaxValue ? decimal.MaxValue : d <= (double)decimal.MinValue ? decimal.MinValue : (decimal)d;
+            return true;
+        }
         if (v.TryGetValue<string>(out var s))
             return decimal.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
         return false;

@@ -41,6 +41,13 @@ public sealed class RecordDraft
             Patient = Patient.Trim(),
             Dosage = Dosage.Trim(),
         };
+        // 字段上限（备注/名称等）：登记与导入同一套规则
+        if (RecordLimits.Problem(record) is { } limit)
+        {
+            errors.Add(limit.Zh);
+            record = null;
+            return false;
+        }
         return true;
     }
 
