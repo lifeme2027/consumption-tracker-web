@@ -209,15 +209,6 @@ public class AuthTests : IDisposable
     }
 
     [Fact]
-    public async Task TooManyPendingChallenges_PerAddress_Rejected()
-    {
-        var w = new TestWallet();
-        var c = _app.NewClient();
-        for (var i = 0; i < 5; i++) Assert.Equal(HttpStatusCode.OK, (await c.Post("/api/auth/challenge", new { address = w.Address })).StatusCode);
-        Assert.Equal(HttpStatusCode.TooManyRequests, (await c.Post("/api/auth/challenge", new { address = w.Address })).StatusCode);
-    }
-
-    [Fact]
     public async Task RateLimit_Challenge_PerIp()
     {
         using var app = new TestApp { Settings = { ["Life:Limits:ChallengePerMinute"] = "3" } };

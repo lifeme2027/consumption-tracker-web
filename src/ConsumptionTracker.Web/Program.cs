@@ -37,14 +37,23 @@ builder.Services.AddRateLimiter(rl =>
     rl.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     rl.OnRejected = async (ctx, ct) =>
     {
-        ctx.HttpContext.Response.Headers.RetryAfter = "60";
-        await ctx.HttpContext.Response.WriteAsJsonAsync(new { error = "请求过于频繁，请稍后再试" }, ct);
+        // 真实的剩余等待秒数（向上取整，至少 1），而不是固定 60
+        var wait = ctx.Lease.TryGetMetadata(MetadataName.RetryAfter, out var ra) ? ra : TimeSpan.FromSeconds(60);
+        var secs = Math.Max(1, (int)Math.Ceiling(wait.TotalSeconds));
+        ctx.HttpContext.Response.Headers.RetryAfter = secs.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        await ctx.HttpContext.Response.WriteAsJsonAsync(new
+        {
+            error = $"请求过于频繁，请 {secs} 秒后再试",
+            errorEn = $"Too many requests. Please try again in {secs} seconds.",
+            retryAfterSeconds = secs,
+        }, ct);
     };
     static string Ip(HttpContext c) => c.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-    FixedWindowRateLimiterOptions Win(int n) => new() { PermitLimit = n, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 };
-    rl.AddPolicy("challenge", c => RateLimitPartition.GetFixedWindowLimiter("c:" + Ip(c), _ => Win(options.Limits.ChallengePerMinute)));
-    rl.AddPolicy("verify", c => RateLimitPartition.GetFixedWindowLimiter("v:" + Ip(c), _ => Win(options.Limits.VerifyPerMinute)));
-    rl.AddPolicy("api", c => RateLimitPartition.GetFixedWindowLimiter("a:" + Ip(c), _ => Win(options.Limits.ApiPerMinute)));
+    RateLimitPartition<string> Win(HttpContext c, string prefix, int n) =>
+        RateLimitPartition.Get(prefix + Ip(c), _ => new ClockFixedWindowLimiter(n, TimeSpan.FromMinutes(1), c.RequestServices.GetRequiredService<TimeProvider>()));
+    rl.AddPolicy("challenge", c => Win(c, "c:", options.Limits.ChallengePerMinute));
+    rl.AddPolicy("verify", c => Win(c, "v:", options.Limits.VerifyPerMinute));
+    rl.AddPolicy("api", c => Win(c, "a:", options.Limits.ApiPerMinute));
 });
 
 var app = builder.Build();
