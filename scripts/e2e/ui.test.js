@@ -155,4 +155,27 @@ test('LM-M1：云端 400 条全选删除后撤销，全部恢复（分批 restor
   await p.close();
 });
 
+test('M-1 文案：一键删除的提示与确认框如实说明（云端 secure_delete/checkpoint/VACUUM/旧备份；本地 IndexedDB 残留），不含“永久/无法恢复”', async () => {
+  const p = await newPage();
+  await loginCloud(p);
+  await p.click('[data-tab=data]'); await sleep(200);
+  const cloudHint = await text(p, '#wipeHint');
+  for (const k of ['secure_delete', 'checkpoint', 'VACUUM', '备份副本不会被删除', '30 天']) assert.ok(cloudHint.includes(k), '云端提示缺少 ' + k + '：' + cloudHint);
+  await p.click('#wipeBtn'); await sleep(250);
+  const cloudDlg = await text(p, '#dlgBody');
+  assert.ok(cloudDlg.includes('VACUUM') && cloudDlg.includes('备份'), cloudDlg);
+  assert.ok(!/永久|无法恢复/.test(cloudDlg + cloudHint));
+  await clickBtn(p, '取消');
+  await p.click('#logoutBtn');
+  for (let i = 0; i < 50 && !/本地/.test(await text(p, '#modeBadge')); i++) await sleep(100);
+  await p.click('[data-tab=data]'); await sleep(200);
+  const localHint = await text(p, '#wipeHint');
+  assert.ok(localHint.includes('IndexedDB') && localHint.includes('不提供撤销') && !/永久|无法恢复/.test(localHint), localHint);
+  await p.click('#wipeBtn'); await sleep(250);
+  const localDlg = await text(p, '#dlgBody');
+  assert.ok(localDlg.includes('IndexedDB') && !/永久|无法恢复/.test(localDlg), localDlg);
+  await clickBtn(p, '取消');
+  await p.close();
+});
+
 test('整个过程没有页面脚本错误', () => { assert.deepStrictEqual(errors, []); });
