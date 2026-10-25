@@ -73,7 +73,8 @@ public sealed class TestApp : WebApplicationFactory<Program>
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        // 只清自己这个库的连接池；全局 ClearAllPools 会在并行测试之间互相关掉对方的连接（共享静态状态）
+        ConsumptionTracker.Web.Storage.Database.ClearPoolFor(Path.Combine(DataDir, "life.db"));
         try { Directory.Delete(DataDir, true); } catch { /* best effort */ }
     }
 }

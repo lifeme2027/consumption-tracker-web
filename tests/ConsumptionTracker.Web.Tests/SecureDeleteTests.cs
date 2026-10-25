@@ -12,7 +12,7 @@ public class SecureDeleteTests : IDisposable
     public SecureDeleteTests() => Directory.CreateDirectory(_dir);
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
+        Database.ClearPoolFor(Path.Combine(_dir, "a.db")); Database.ClearPoolFor(Path.Combine(_dir, "m.db"));
         try { Directory.Delete(_dir, true); } catch { }
     }
 
@@ -70,7 +70,7 @@ public class SecureDeleteTests : IDisposable
         var a = await app.LoginAsync(new TestWallet());
         for (var i = 0; i < 30; i++) await a.AddAsync(Http.Rec("x" + i));
         var wal = Path.Combine(app.DataDir, "life.db-wal");
-        Assert.True(new FileInfo(wal).Length > 0);
+        Assert.True(File.Exists(wal) && new FileInfo(wal).Length > 0);
         await a.Post("/api/account/delete-data", new { confirm = "DELETE" });
         Assert.Equal(0, File.Exists(wal) ? new FileInfo(wal).Length : 0);
     }

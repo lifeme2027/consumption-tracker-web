@@ -18,7 +18,7 @@ public sealed class RepoFixture : IDisposable
     public UserRepository User(TestWallet w) => Store.ForUser(w.Address);
     public void Dispose()
     {
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        ConsumptionTracker.Web.Storage.Database.ClearPoolFor(Path.Combine(Dir, "t.db"));
         try { Directory.Delete(Dir, true); } catch { }
     }
 }

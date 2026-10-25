@@ -15,14 +15,23 @@ public sealed class Database
         Path = System.IO.Path.GetFullPath(databasePath);
         var dir = System.IO.Path.GetDirectoryName(Path);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-        _connectionString = new SqliteConnectionStringBuilder
-        {
-            DataSource = Path,
-            Mode = SqliteOpenMode.ReadWriteCreate,
-            Cache = SqliteCacheMode.Private,
-            Pooling = true,
-        }.ToString();
+        _connectionString = ConnectionStringFor(Path);
         Migrate();
+    }
+
+    public static string ConnectionStringFor(string fullPath) => new SqliteConnectionStringBuilder
+    {
+        DataSource = fullPath,
+        Mode = SqliteOpenMode.ReadWriteCreate,
+        Cache = SqliteCacheMode.Private,
+        Pooling = true,
+    }.ToString();
+
+    /// <summary>只清掉「这个数据库文件」的连接池（测试收尾用；不碰进程内其他数据库的池）。</summary>
+    public static void ClearPoolFor(string databasePath)
+    {
+        using var c = new SqliteConnection(ConnectionStringFor(System.IO.Path.GetFullPath(databasePath)));
+        SqliteConnection.ClearPool(c);
     }
 
     public SqliteConnection Open()
