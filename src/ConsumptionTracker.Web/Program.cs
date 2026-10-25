@@ -26,6 +26,8 @@ builder.Services.AddSingleton(sp =>
     return new Database(Path.Combine(dir, options.Storage.DatabaseFile));
 });
 builder.Services.AddSingleton<UserStore>();
+builder.Services.AddSingleton<MaintenanceService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<MaintenanceService>());
 builder.Services.AddSingleton<ChallengeStore>();
 builder.Services.AddSingleton<SessionStore>();
 builder.Services.AddSingleton<AuthService>();
