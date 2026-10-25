@@ -103,42 +103,16 @@ IIS 下默认环境为 `Production`（不要设置 `ASPNETCORE_ENVIRONMENT=Devel
 3. 若新版本对数据库做过结构升级且旧版不能读：用升级前备份的 `App_Data` 覆盖回去（会丢失升级后新增的数据；故升级前备份很重要）。
 4. 启动站点并验证。
 
-## 数据保留与清理（隐私页对外承诺的期限，请务必执行）
+## 备份与日志（手动管理，不承诺自动清理）
 
-隐私页（`privacy.html` / `privacy-en.html`）向用户承诺：**服务器上的明文备份最长保留 30 天，IIS 访问日志最长保留 30 天**。这两项不是程序自动做的，由管理员的计划任务保证。
+隐私页（`privacy.html` / `privacy-en.html`）如实告知用户：**服务器上已存在的备份和 IIS 访问日志不会随“删除”自动清除，由管理员手动清理，不承诺自动清理，也不承诺具体的保留期限**。因此：
 
-要点：
-
-- 用户在云端点“一键删除”时，程序会擦零（`secure_delete`）、立即截断 WAL、并每 24 小时 VACUUM；但**已经存在的备份副本不会被程序删除**——所以备份必须有保留期，且保留期内旧备份里仍有“已删除”的数据（隐私页已如实告知）。
-- 备份目录请按日期命名（如 `D:\Backup\life\2026-10-25`，升级步骤里已是这个格式），清理脚本按目录名里的日期判断。
-- **第一次上线本版本时，请先手工处理已经存在的旧备份**：目录里可能有超过 30 天的备份，不会自动消失。先 `-WhatIf` 试跑，确认后再正式运行。
-- 备份和日志都要放在受控位置并限制访问权限（备份是明文）。
-
-清理脚本：仓库 `scripts/ops/cleanup-life.ps1`（**不在发布包内**，单独复制到服务器，如 `D:\Web\life-ops\cleanup-life.ps1`；不要放进站点目录 `D:\Web\life`）。它做三件事：删除早于 30 天的备份目录、删除早于 30 天的 IIS 日志（`*.log`）、删除早于 30 天的应用 stdout 日志。**不会碰 `App_Data` 和 `appsettings.Production.json`。**
-
-```powershell
-# 1) 先试跑，只列出将被删除的内容
-powershell -ExecutionPolicy Bypass -File D:\Web\life-ops\cleanup-life.ps1 -WhatIf
-# 2) 如果 IIS 日志不在默认目录，指定实际目录（IIS 管理器 → 站点 → 日志 → 目录，注意是 W3SVC<站点ID> 的上一级）
-powershell -ExecutionPolicy Bypass -File D:\Web\life-ops\cleanup-life.ps1 -IisLogDir 'D:\Logs\IIS' -WhatIf
-```
-
-计划任务示例（每天 03:30，以 SYSTEM 运行；在管理员 PowerShell 里执行一次）：
-
-```powershell
-$act = New-ScheduledTaskAction -Execute 'powershell.exe' `
-  -Argument '-NoProfile -ExecutionPolicy Bypass -File D:\Web\life-ops\cleanup-life.ps1 -Days 30'
-$trg = New-ScheduledTaskTrigger -Daily -At 3:30am
-Register-ScheduledTask -TaskName 'life-retention-cleanup' -Action $act -Trigger $trg `
-  -User 'SYSTEM' -RunLevel Highest -Description 'life.kastop.com: 备份与 IIS 日志保留 30 天'
-```
-
-建议再加一个备份计划任务（每天一次，停站点后复制或使用 SQLite 在线备份均可），备份目录名用 `yyyy-MM-dd`。每月核对一次：备份目录里最老的目录不超过 30 天、IIS 日志目录里最老的文件不超过 30 天（`Get-ChildItem D:\Backup\life | Sort-Object Name | Select-Object -First 1`）。
-
-IIS 日志说明：IIS 默认在 `C:\inetpub\logs\LogFiles\W3SVC<站点ID>\` 写访问日志，内容含时间、客户端 IP、请求路径、状态码、User-Agent。应用把记录内容放在请求体里（搜索也是 POST），**日志里没有记录内容**，但有 IP 与访问时间，属个人数据，所以隐私页也写明了。如需缩短，可在 IIS 日志设置里改“滚动”周期，或把 `-Days` 改小；**不要**调到比隐私页承诺的 30 天更长。
+- 用户在云端点“一键删除”时，程序会擦零（`secure_delete`）、立即截断 WAL，并每 24 小时 VACUUM；但**已经存在的备份副本不会被程序删除**，旧备份里仍可能有用户已经删除的数据。
+- 管理员可手动清理旧备份和日志（备份目录建议按日期命名，如 `D:\Backup\life\2026-10-25`，升级步骤里已是这个格式；IIS 日志默认在 `C:\inetpub\logs\LogFiles\W3SVC<站点ID>\`，含时间、客户端 IP、请求路径、状态码、User-Agent，不含记录内容）。
+- 备份和日志请放在受控位置并限制访问权限（备份是明文），不要对外承诺超出上述内容的清理期限。
 
 ## 运维提示
 
 - 日志：默认只记 Warning 以上，且**不含记录内容**。排错需要标准输出日志时可临时把 `web.config` 里 `stdoutLogEnabled` 改为 `true` 并创建 `logs` 目录，排完请改回 `false`。
 - 数据导出：用户可自行在“数据”页导出；服务器侧备份请定期复制 `App_Data`。
-- 数据库文件包含用户明文记录（用药名称、用药人、剂量等属健康敏感信息），请限制服务器上对 `App_Data` 与备份目录的访问，建议启用磁盘加密（BitLocker），并定期备份到受控位置；备份保留期见上节“数据保留与清理”（最长 30 天）。
+- 数据库文件包含用户明文记录（用药名称、用药人、剂量等属健康敏感信息），请限制服务器上对 `App_Data` 与备份目录的访问，建议启用磁盘加密（BitLocker），并定期备份到受控位置；备份和日志由管理员手动清理（见上节“备份与日志”）。

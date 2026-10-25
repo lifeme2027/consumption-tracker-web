@@ -127,6 +127,13 @@ test('LM-L3：单价 0.001 不再静默存成 0 分，给出明确提示且不�
   await p.close();
 });
 
+test('③/① 本地模式：空文件/高版本/缺版本的覆盖导入被拒绝，现有记录保持原样', async () => {
+  const p = await newPage();
+  assert.match(await text(p, '#modeBadge'), /本地/);
+  await emptyReplaceRegression(p, 'L');
+  await p.close();
+});
+
 test('云端（开发登录）模式：登记 → 列表 → 编辑 → 删除 → 撤销', async () => {
   const p = await newPage();
   await loginCloud(p);
@@ -155,12 +162,60 @@ test('LM-M1：云端 400 条全选删除后撤销，全部恢复（分批 restor
   await p.close();
 });
 
+/** 在「数据」页用覆盖模式导入一个文件，确认对话框点「清空并导入」，返回 #impMsg 与 #impDetail 的文字。 */
+async function replaceImport(p, content, name) {
+  const f = path.join(dataDir, name);
+  fs.writeFileSync(f, content);
+  await p.click('[data-tab=data]'); await sleep(200);
+  const input = await p.$('#impFile');
+  await input.uploadFile(f);
+  await p.evaluate(() => { document.querySelector('input[name=impMode][value=replace]').click(); });
+  await p.click('#impBtn'); await sleep(250);
+  await clickBtn(p, '清空并导入');
+  for (let i = 0; i < 40 && !(await text(p, '#impMsg')).trim(); i++) await sleep(100);
+  return (await text(p, '#impMsg')) + ' | ' + (await text(p, '#impDetail'));
+}
+
+/** ③/① 回归：合法但空的文件、版本号异常的文件覆盖导入都要被拒绝并给出原因，现有记录原样保留。本地与云端共用。 */
+async function emptyReplaceRegression(p, label) {
+  await fillAndSave(p, { name: '要保留的药' + label, price: '9.9' });
+  for (let i = 0; i < 30 && !/已保存/.test(await text(p, '#formMsg')); i++) await sleep(100);
+  await openHistory(p);
+  const base0 = (await rows(p)) - 1;                                    // 云端共享账户里可能已有别的测试留下的记录
+  await waitRows(p, base0 + 1, label + ' 先有 1 条新记录');
+  const empty = JSON.stringify({ app: 'consumption-tracker', version: 2, records: [], products: [] });
+  let out = await replaceImport(p, empty, 'empty-' + label + '.json');
+  assert.match(out, /没有任何记录/, label + ' 空覆盖应被拒绝：' + out);
+  assert.match(out, /一键删除全部数据/, label + ' 应提示用一键删除：' + out);
+  await openHistory(p);
+  await waitRows(p, base0 + 1, label + ' 空覆盖被拒绝后旧记录必须还在');
+  assert.match(await text(p, '#list'), new RegExp('要保留的药' + label));
+
+  out = await replaceImport(p, JSON.stringify({ app: 'consumption-tracker', version: 99, records: [], products: [] }), 'v99-' + label + '.json');
+  assert.match(out, /升级/, label + ' 高版本应提示升级：' + out);
+  out = await replaceImport(p, JSON.stringify({ app: 'consumption-tracker', records: [], products: [] }), 'nov-' + label + '.json');
+  assert.match(out, /版本号无效/, label + ' 缺少版本号应被拒绝：' + out);
+  await openHistory(p);
+  await waitRows(p, base0 + 1, label + ' 版本号被拒绝后旧记录必须还在');
+
+  // 清理
+  await p.evaluate(() => [...document.querySelectorAll('#list button')].find((b) => b.textContent === '删除').click());
+  await sleep(150); await clickBtn(p, '删除'); await waitRows(p, base0, label + ' 清理');
+}
+
+test('③/① 云端模式：空文件/高版本/缺版本的覆盖导入被拒绝，现有记录保持原样', async () => {
+  const p = await newPage();
+  await loginCloud(p);
+  await emptyReplaceRegression(p, 'C');
+  await p.close();
+});
+
 test('M-1 文案：一键删除的提示与确认框如实说明（云端 secure_delete/checkpoint/VACUUM/旧备份；本地 IndexedDB 残留），不含“永久/无法恢复”', async () => {
   const p = await newPage();
   await loginCloud(p);
   await p.click('[data-tab=data]'); await sleep(200);
   const cloudHint = await text(p, '#wipeHint');
-  for (const k of ['secure_delete', 'checkpoint', 'VACUUM', '备份副本不会被删除', '30 天']) assert.ok(cloudHint.includes(k), '云端提示缺少 ' + k + '：' + cloudHint);
+  for (const k of ['secure_delete', 'checkpoint', 'VACUUM', '备份副本和访问日志不会随之自动删除', '手动清理']) assert.ok(cloudHint.includes(k), '云端提示缺少 ' + k + '：' + cloudHint);
   await p.click('#wipeBtn'); await sleep(250);
   const cloudDlg = await text(p, '#dlgBody');
   assert.ok(cloudDlg.includes('VACUUM') && cloudDlg.includes('备份'), cloudDlg);
