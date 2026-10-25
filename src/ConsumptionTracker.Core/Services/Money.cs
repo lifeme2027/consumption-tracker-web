@@ -20,6 +20,45 @@ public static class Money
 
     public const string PriceFormatHint = "价格无效（需为不小于 0 的数字，小数请用小数点，如 12.50）";
     public const string QuantityFormatHint = "数量无效（需大于 0，最多 6 位小数，不超过 1000000）";
+    public const string PriceFormatHintEn = "Invalid price (a number not less than 0; use a decimal point, e.g. 12.50)";
+    public const string QuantityFormatHintEn = "Invalid quantity (greater than 0, at most 6 decimal places, not more than 1000000)";
+
+    /// <summary>导入用：解释价格文本为什么不合格（合格返回 null）。给出具体原因而不是笼统的「无效」。</summary>
+    public static RuleProblem? PriceProblem(string? text)
+    {
+        if (TryParseYuan(text, out _)) return null;
+        var s = (text ?? "").Trim();
+        if (s.Length == 0) return new("价格为空", "Price is empty");
+        if (s[0] == '¥' || s[0] == '￥') s = s[1..].TrimStart();
+        if (s.StartsWith('-')) return new("价格不能为负数", "Price cannot be negative");
+        var plain = s.Replace(",", "");
+        var dot = plain.IndexOf('.');
+        var whole = (dot < 0 ? plain : plain[..dot]).TrimStart('0');
+        var syntaxOk = AllDigits(whole) && (dot < 0 || AllDigits(plain[(dot + 1)..]));
+        if (syntaxOk && whole.Length > 0 && (whole.Length >= 10 || long.Parse(whole, CultureInfo.InvariantCulture) * 100 > MaxPriceCents))
+            return new("价格过大（最多 10 亿元）", "Price too large (max 1,000,000,000 yuan)");
+        return new(PriceFormatHint, PriceFormatHintEn);
+    }
+
+    /// <summary>导入用：解释数量文本为什么不合格（合格返回 null）。</summary>
+    public static RuleProblem? QuantityProblem(string? text)
+    {
+        if (TryParseQuantity(text, out _)) return null;
+        var s = (text ?? "").Trim();
+        if (s.Length == 0) return new("数量为空", "Quantity is empty");
+        if (s.StartsWith('-')) return new("数量必须大于 0", "Quantity must be greater than 0");
+        var dot = s.IndexOf('.');
+        var intPart = dot < 0 ? s : s[..dot];
+        var frac = dot < 0 ? "" : s[(dot + 1)..];
+        if (intPart.Length > 0 && AllDigits(intPart) && AllDigits(frac) && !(dot >= 0 && frac.Length == 0))
+        {
+            if (frac.Length > MaxQuantityDecimals) return new($"数量最多 {MaxQuantityDecimals} 位小数", $"Quantity allows at most {MaxQuantityDecimals} decimal places");
+            if (intPart.TrimStart('0').Length > 7 || decimal.Parse(s, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture) > MaxQuantity)
+                return new("数量过大（最多 1000000）", "Quantity too large (max 1,000,000)");
+            return new("数量必须大于 0", "Quantity must be greater than 0");
+        }
+        return new(QuantityFormatHint, QuantityFormatHintEn);
+    }
 
     /// <summary>decimal 元 → 分（decimal 本身是十进制精确的，半进位）。仅用于已是 decimal 的 JSON 数值。</summary>
     public static long ToCents(decimal yuan) => (long)Math.Round(yuan * 100m, MidpointRounding.AwayFromZero);
