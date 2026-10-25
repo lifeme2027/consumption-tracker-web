@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>日常消费 / 用药记录</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top">
+  <h1>日常消费 / 用药记录</h1>
+  <div id="who" class="who hidden">
+    <span id="whoAddr" class="mono"></span>
+    <button id="logoutBtn" class="btn small" type="button">退出登录</button>
+  </div>
+</header>
+
+<main>
+  <!-- 登录 -->
+  <section id="loginView" class="card hidden">
+    <h2>用 Kaspa 地址登录</h2>
+    <p class="hint">只需证明你拥有某个 Kaspa 地址（kaspa:q… 主网）。登录签名<strong>不会产生任何交易，不涉及转账或支付</strong>；本站<strong>绝不会</strong>索要私钥或助记词。</p>
+    <p class="hint warn">仅输入地址<strong>不能</strong>登录：必须用该地址的密钥对服务器给出的一次性消息签名。</p>
+
+    <div class="row">
+      <button id="kaswareBtn" class="btn primary" type="button">连接 KasWare 钱包并签名登录</button>
+    </div>
+    <p id="kaswareHint" class="hint"></p>
+
+    <hr>
+    <h3>手动签名（任意支持 Kaspa 个人消息 Schnorr 签名的工具）</h3>
+    <label>Kaspa 地址
+      <input id="loginAddr" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="kaspa:q…">
+    </label>
+    <div class="row"><button id="challengeBtn" class="btn" type="button">① 获取待签名消息</button></div>
+    <div id="manualBox" class="hidden">
+      <label>待签名消息（请原样签名，约 <span id="ttl">5</span> 分钟内有效，只能用一次）
+        <textarea id="challengeMsg" rows="6" readonly></textarea>
+      </label>
+      <label>签名（64 字节 Schnorr，十六进制或 Base64）
+        <textarea id="sigInput" rows="3" autocomplete="off" spellcheck="false"></textarea>
+      </label>
+      <div class="row"><button id="verifyBtn" class="btn primary" type="button">② 提交签名并登录</button></div>
+    </div>
+
+    <div id="devBox" class="hidden">
+      <hr>
+      <p class="hint warn">开发模式：已启用免签名登录开关（仅用于本地开发，生产环境不存在此入口）。</p>
+      <button id="devBtn" class="btn" type="button">开发登录（无签名）</button>
+    </div>
+    <p id="loginMsg" class="msg" role="status"></p>
+  </section>
+
+  <!-- 主界面 -->
+  <section id="appView" class="hidden">
+    <nav class="tabs" id="tabs">
+      <button type="button" data-tab="register" class="active">登记</button>
+      <button type="button" data-tab="history">记录</button>
+      <button type="button" data-tab="stats">统计</button>
+      <button type="button" data-tab="data">数据</button>
+    </nav>
+
+    <!-- 登记 -->
+    <section id="tab-register" class="card">
+      <h2 id="formTitle">登记一条记录</h2>
+      <form id="recForm" autocomplete="off" novalidate>
+        <label>条码（USB 扫码枪直接扫，或手动输入后按回车）
+          <div class="row nowrap">
+            <input id="fBarcode" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" class="grow" placeholder="扫描 / 输入条码后回车">
+            <button id="camBtn" class="btn" type="button">相机扫码</button>
+          </div>
+        </label>
+        <p id="lookupHint" class="hint"></p>
+        <label>名称 <input id="fName" type="text" maxlength="100" required></label>
+        <div class="grid2">
+          <label>单价（元） <input id="fPrice" type="text" inputmode="decimal" placeholder="0.00" required></label>
+          <label>数量 <input id="fQty" type="text" inputmode="decimal" value="1" required></label>
+        </div>
+        <div class="grid2">
+          <label>分类 <select id="fCategory"></select></label>
+          <label>日期 <input id="fDate" type="date" required></label>
+        </div>
+        <div class="grid2">
+          <label>用药人 <input id="fPatient" type="text" maxlength="40" placeholder="药品类可填"></label>
+          <label>剂量 / 规格 <input id="fDosage" type="text" maxlength="60" placeholder="如 0.5g×24片，一次1片"></label>
+        </div>
+        <label>批次名称 <input id="fBatch" type="text" maxlength="60" list="batchList" placeholder="如：10月购药 / 方1（可留空）"></label>
+        <datalist id="batchList"></datalist>
+        <label>备注 <textarea id="fNote" rows="2" maxlength="1000"></textarea></label>
+        <p class="hint">小计：<strong id="fAmount">¥0.00</strong></p>
+        <div class="row">
+          <button id="saveBtn" class="btn primary" type="submit">保存</button>
+          <button id="clearBtn" class="btn" type="button">清空</button>
+          <button id="cancelEditBtn" class="btn hidden" type="button">取消编辑</button>
+        </div>
+        <p id="formMsg" class="msg" role="status"></p>
+      </form>
+    </section>
+
+    <!-- 记录 -->
+    <section id="tab-history" class="card hidden">
+      <h2>记录</h2>
+      <form id="filterForm" class="filters" autocomplete="off">
+        <label>起 <input id="qFrom" type="date"></label>
+        <label>止 <input id="qTo" type="date"></label>
+        <label>分类 <select id="qCategory"></select></label>
+        <label>批次 <select id="qBatch"></select></label>
+        <label class="wide">关键词 <input id="qKeyword" type="search" placeholder="名称/条码/备注/用药人/批次"></label>
+        <div class="row wide">
+          <button class="btn primary" type="submit">查询</button>
+          <button id="qReset" class="btn" type="button">重置</button>
+        </div>
+      </form>
+      <p id="listSummary" class="hint"></p>
+      <div class="row bulk">
+        <label class="inline"><input id="selAll" type="checkbox"> 全选</label>
+        <input id="bulkBatch" type="text" maxlength="60" placeholder="批次名称" list="batchList">
+        <button id="bulkAssign" class="btn small" type="button">归入批次</button>
+        <button id="bulkDelete" class="btn small danger" type="button">删除所选</button>
+      </div>
+      <div id="list" class="list"></div>
+    </section>
+
+    <!-- 统计 -->
+    <section id="tab-stats" class="card hidden">
+      <h2>统计</h2>
+      <div class="grid2">
+        <label>月份 <input id="sMonth" type="month"></label>
+        <label>日期 <input id="sDay" type="date"></label>
+      </div>
+      <div class="kpis">
+        <div class="kpi"><span class="k">当日合计</span><strong id="sDayTotal">¥0.00</strong><span id="sDayCount" class="hint"></span></div>
+        <div class="kpi"><span class="k">当月合计</span><strong id="sMonthTotal">¥0.00</strong><span id="sMonthCount" class="hint"></span></div>
+      </div>
+      <h3>分类占比（当月）</h3>
+      <div id="sCats" class="bars"></div>
+      <h3>每日支出（当月）</h3>
+      <div id="sDays" class="bars"></div>
+    </section>
+
+    <!-- 数据 -->
+    <section id="tab-data" class="card hidden">
+      <h2>数据管理</h2>
+      <h3>导出</h3>
+      <p class="hint">导出的 JSON/CSV 与桌面版、手机版格式兼容（JSON app=consumption-tracker，version=2；CSV 为带 BOM 的 UTF-8）。</p>
+      <div class="row">
+        <a class="btn" href="/api/export.json" download>导出 JSON</a>
+        <a class="btn" href="/api/export.csv" download>导出 CSV</a>
+        <a class="btn primary" href="/api/export.json" download="consumption-all.json">一键导出全部数据</a>
+      </div>
+      <hr>
+      <h3>导入</h3>
+      <div class="row">
+        <input id="impFile" type="file" accept=".json,.csv,application/json,text/csv">
+      </div>
+      <div class="row">
+        <label class="inline"><input type="radio" name="impMode" value="merge" checked> 合并（相同 id 以导入为准）</label>
+        <label class="inline"><input type="radio" name="impMode" value="replace"> 覆盖（先清空再导入）</label>
+      </div>
+      <div class="row"><button id="impBtn" class="btn" type="button">导入</button></div>
+      <p id="impMsg" class="msg" role="status"></p>
+      <hr>
+      <h3>一键删除全部数据</h3>
+      <p class="hint">将永久删除此地址名下的<strong>全部</strong>记录、商品记忆与批次，不可恢复。建议先导出备份。</p>
+      <div class="row"><button id="wipeBtn" class="btn danger" type="button">一键删除全部数据…</button></div>
+      <p id="wipeMsg" class="msg" role="status"></p>
+    </section>
+  </section>
+</main>
+
+<footer class="foot">
+  <a href="/privacy.html">隐私说明</a> ·
+  仅为记录工具，不涉及支付或转账 · 数据存放在服务器，不对外分享
+</footer>
+
+<div id="overlay" class="overlay hidden" role="dialog" aria-modal="true">
+  <div class="dialog">
+    <h3 id="dlgTitle"></h3>
+    <div id="dlgBody"></div>
+    <div id="dlgBtns" class="row"></div>
+  </div>
+</div>
+
+<script src="/vendor/html5-qrcode.min.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

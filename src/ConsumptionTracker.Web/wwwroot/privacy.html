@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>隐私说明 - 日常消费 / 用药记录</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top"><h1>隐私说明</h1><a class="btn small" href="/">返回</a></header>
+<main>
+<section class="card">
+<h2>这是什么</h2>
+<p>一个<strong>纯记录工具</strong>：记录日常消费和用药（名称、价格、数量、分类、日期、批次、用药人、剂量、备注）。<strong>不涉及任何支付、转账或交易</strong>，也不会读取你的钱包余额。</p>
+
+<h2>数据存放在服务器，不对外分享</h2>
+<ul>
+<li>你的记录保存在本站服务器的数据库中，<strong>不对外分享</strong>、不出售、不用于广告，也没有任何第三方统计或分析脚本。</li>
+<li>数据按 Kaspa 地址隔离：每个地址只能读写自己名下的数据，服务端对每次读写都校验归属。</li>
+<li>本站<strong>没有端到端加密</strong>：服务器端可以读取明文数据，服务器管理员在技术上也能访问数据库文件。请不要在备注等字段里写入你不希望存放在服务器上的敏感信息。</li>
+<li>地址不等于匿名：你的 Kaspa 地址本身是公开的链上标识，本站也会保存它来区分账户；本站<strong>不承诺匿名</strong>。</li>
+</ul>
+
+<h2>登录与密钥</h2>
+<ul>
+<li>登录时只需用你的 Kaspa 钱包对服务器给出的一次性消息做签名，用于证明你拥有该地址。消息包含随机 Nonce 和时间，只能使用一次，几分钟内有效。</li>
+<li>这个签名<strong>不会产生链上交易，也不会授权转账</strong>。</li>
+<li>本站<strong>永远不会</strong>向你索要私钥或助记词。如果有人以本站名义索要，请勿提供。</li>
+<li>登录成功后，服务器下发一个有效期有限的 HttpOnly 会话 Cookie；退出登录会立即作废它。</li>
+</ul>
+
+<h2>日志</h2>
+<p>服务器日志不记录记录内容（名称、备注、用药人、剂量、批次等）。关键词搜索使用请求体提交，不会出现在网址里。</p>
+
+<h2>你的控制权</h2>
+<ul>
+<li><strong>一键导出全部数据</strong>：在“数据”页下载 JSON / CSV。</li>
+<li><strong>一键删除全部数据</strong>：在“数据”页删除此地址名下的全部记录（需要二次确认，不可恢复）。</li>
+</ul>
+
+<h2>其他</h2>
+<p>页面不加载任何外部脚本、字体或统计服务，浏览器内容安全策略（CSP）禁止向外部站点发起连接。扫码使用随站点一起提供的本地组件，相机画面只在你的浏览器内处理，不会上传。</p>
+</section>
+</main>
+</body>
+</html>
