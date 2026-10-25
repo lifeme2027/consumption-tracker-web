@@ -25,18 +25,8 @@
     const neg = cents < 0; const a = Math.abs(cents);
     return (neg ? '-' : '') + '¥' + Math.floor(a / 100).toLocaleString('en-US') + '.' + pad(a % 100);
   }
-  /** "12.3" -> 1230；非法返回 null。只做字符串解析，避免浮点误差。 */
-  function yuanToCents(s) {
-    const m = /^\s*(\d{1,9})(?:\.(\d{1,2}))?\s*$/.exec(s || '');
-    if (!m) return null;
-    return parseInt(m[1], 10) * 100 + parseInt((m[2] || '').padEnd(2, '0') || '0', 10);
-  }
-  function parseQty(s) {
-    const m = /^\s*(\d{1,6})(?:\.(\d{1,4}))?\s*$/.exec(s || '');
-    if (!m) return null;
-    const v = Number(m[1] + (m[2] ? '.' + m[2] : ''));
-    return v > 0 ? v : null;
-  }
+  // 金额/数量解析在 money.js（与桌面/手机同一规则，shared-vectors 校验）
+  const { yuanToCents, parseQty, amountCents } = window.LifeMoney;
 
   async function api(method, url, body, raw) {
     const headers = { 'X-Requested-With': 'life-web' };
@@ -170,8 +160,8 @@
 
   // ---------- 登记 / 编辑 ----------
   function updateAmount() {
-    const p = yuanToCents($('fPrice').value), q = parseQty($('fQty').value);
-    $('fAmount').textContent = (p == null || q == null) ? '—' : fmtYuan(Math.round(p * q + 1e-9));
+    const a = amountCents(yuanToCents($('fPrice').value), $('fQty').value);
+    $('fAmount').textContent = a == null ? '—' : fmtYuan(a);
   }
   function resetForm() {
     state.editingId = null;
@@ -205,8 +195,8 @@
   function collectForm() {
     const priceCents = yuanToCents($('fPrice').value), quantity = parseQty($('fQty').value);
     if (!$('fName').value.trim()) return { error: '请填写名称' };
-    if (priceCents == null) return { error: '单价格式不正确（最多两位小数）' };
-    if (quantity == null) return { error: '数量必须大于 0（最多四位小数）' };
+    if (priceCents == null) return { error: '单价无效（小数请用小数点，如 12.50；超过两位小数按四舍五入）' };
+    if (quantity == null) return { error: '数量无效（需大于 0，最多 6 位小数）' };
     if (!$('fDate').value) return { error: '请选择日期' };
     return {
       body: {
