@@ -70,7 +70,7 @@
       <button type="button" data-tab="stats">统计</button>
       <button type="button" data-tab="data">数据</button>
     </nav>
-    <p id="modeInfoLocal" class="mode-info local" data-mode="local"><strong>本地模式：</strong>数据只在你的浏览器里（不发送到服务器），清除浏览器数据或换设备会丢失，请定期导出备份。</p>
+    <p id="modeInfoLocal" class="mode-info local" data-mode="local"><strong>本地模式：</strong>数据只在你的浏览器里（不发送到服务器），清除浏览器数据或换设备会丢失，请定期导出备份。开启「查询商品库」（默认开启，可在「数据」页关闭）时，扫码或输入的条码会发送到本站服务器用于查询商品库（不含其他数据、不记录）。</p>
     <p id="modeInfoCloud" class="mode-info cloud hidden" data-mode="cloud"><strong>云端模式：</strong>数据存在服务器上，没有端到端加密、不承诺匿名。</p>
 
     <!-- 登记 -->
@@ -186,6 +186,10 @@
         <p id="syncMsg" class="msg" role="status"></p>
         <div id="syncDetail" class="problems hidden"></div>
       </section>
+      <hr>
+      <h3>设置</h3>
+      <label class="inline"><input id="catalogToggle" type="checkbox" checked> 查询商品库（会把条码发送到本站服务器，不含其他数据、不记录）</label>
+      <p class="hint">开启时，扫码或输入条码后，会把<strong>仅条码</strong>发给本站服务器查询商品库（名称、分类、参考售价）；服务器不记录、不保存。关闭后完全不发任何请求，只用本机的历史记忆。浏览器记住这个选择。</p>
       <p id="loginTip" class="hint" data-mode="local">想把数据存到云端、在多台设备上使用？点页头「登录 Kaspa 钱包（可选，云端保存）」。不登录完全不影响使用。</p>
       <hr>
       <h3>一键删除全部数据</h3>
@@ -217,6 +221,7 @@
 <script src="/vendor/html5-qrcode.min.js"></script>
 <script src="/money.js"></script>
 <script src="/life-i18n.js"></script>
+<script src="/life-catalog.js"></script>
 <script src="/life-local.js"></script>
 <script src="/life-remote.js"></script>
 <script src="/life-mode.js"></script>

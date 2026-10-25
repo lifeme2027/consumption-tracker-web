@@ -134,7 +134,15 @@
     };
   }
 
+  /** 商品库带出内容后的提示（priceFrom：'memory' 本地历史价 / 'catalog' 商品库参考售价 / 'none' 没有价格）。 */
+  function catalogHint(priceFrom, l) {
+    if (priceFrom === 'memory') return t('已从商品库带出名称、分类（价格取自本地历史记忆），请核对。', 'Name and category filled from the product catalog (price taken from your local history); please check.', l);
+    if (priceFrom === 'catalog') return t('已从商品库带出名称、分类、价格（价格取自商品库参考售价），请核对。', 'Name, category and price filled from the product catalog (price is the catalog reference sale price); please check.', l);
+    return t('已从商品库带出名称、分类，请填写价格并核对。', 'Name and category filled from the product catalog; please enter the price and check.', l);
+  }
+
   var api = {
+    catalogHint: catalogHint,
     REASONS: REASONS, MAX_SHOW: MAX_SHOW, lang: lang, setLang: setLang, t: t,
     translateReason: translateReason, translateLabel: translateLabel, translateMessage: translateMessage, errorText: errorText,
     failureView: failureView, resultView: resultView,

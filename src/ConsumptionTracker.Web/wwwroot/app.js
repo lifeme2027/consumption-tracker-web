@@ -11,7 +11,7 @@
       '你已下载的导出文件、其他设备或其他浏览器里的数据都不会被删除。建议先导出备份。',
   };
   const $ = (id) => document.getElementById(id);
-  const LL = window.LifeLocal, LM = window.LifeMode, LR = window.LifeRemote, I18N = window.LifeI18n;
+  const LL = window.LifeLocal, LM = window.LifeMode, LR = window.LifeRemote, I18N = window.LifeI18n, CAT = window.LifeCatalog;
   // mc：模式控制器（默认本地；登录 Kaspa 后才是云端）。数据读写一律经 store()，界面不关心当前是哪种存储。
   const state = { cfg: null, meta: { categories: [], batches: [] }, editingId: null, records: [], challenge: null, mc: null };
   const store = () => state.mc.store;
@@ -205,6 +205,7 @@
   let lastLookedCode = '';   // 最近一次已查询的条码（见 lookup）
   function resetForm() {
     state.editingId = null;
+    dropTempCategories();
     $('recForm').reset();
     $('fQty').value = '1'; $('fDate').value = today();
     $('formTitle').textContent = '登记一条记录';
@@ -217,32 +218,42 @@
   function focusBarcode() { setTimeout(() => { if (!$('tab-register').classList.contains('hidden')) $('fBarcode').focus(); }, 0); }
   // 条码记忆（本地模式存 IndexedDB 的 products 表，不上传）：lookup 命中即用历史名称/分类/单价覆盖表单（均可再改）；
   // 未命中不清空用户已填内容。lastLookedCode 防止「回车查一次 + 随后失焦 change 又查一次」造成闪烁、覆盖用户刚改的内容。
-  function setCategory(cat) {
+  function setCategory(cat, temp) {
     const sel = $('fCategory');
-    if (![...sel.options].some((o) => o.value === cat)) sel.append(el('option', { value: cat, text: cat }));
+    if (![...sel.options].some((o) => o.value === cat)) { const o = el('option', { value: cat, text: cat }); if (temp) o.dataset.tmp = '1'; sel.append(o); }
     sel.value = cat;
   }
-  /** fromEnter=true：扫码枪/回车/相机回调，总是查并把焦点移到数量或名称；false：条码框 change（Tab/失焦），仅在条码值变化时查，不抢焦点。 */
+  /** 带出商品库的内容时，分类下拉里临时加的选项在重置时清掉（商品库分类很多，不能越积越多）。 */
+  function dropTempCategories() { for (const o of [...$('fCategory').options]) if (o.dataset.tmp === '1') o.remove(); }
+  /** fromEnter=true：扫码枪/回车/相机回调，总是查并把焦点移到数量或名称；false：条码框 change（Tab/失焦），仅在条码值变化时查，不抢焦点。
+   *  顺序：商品库（开关开启时发条码查询，失败/不可用/未命中都静默忽略）→ 本地历史记忆 → 手动填写。
+   *  商品库命中：名称、分类取商品库；价格「本地历史价优先，否则商品库参考售价」。 */
   async function lookup(fromEnter = true) {
     const code = $('fBarcode').value.trim();
     if (!code) { lastLookedCode = ''; if (fromEnter) $('fName').focus(); return; }
     if (!fromEnter && code === lastLookedCode) return;
     lastLookedCode = code;
+    const stale = () => $('fBarcode').value.trim() !== code;   // 查询期间条码又变了，丢弃过期结果
     try {
-      const p = await store().lookup(code);
-      if ($('fBarcode').value.trim() !== code) return;   // 查询期间条码又变了，丢弃过期结果
-      if (p.found) {
-        $('fName').value = p.name;
-        if (p.category) setCategory(p.category);
-        if (p.lastPriceCents != null) $('fPrice').value = (p.lastPriceCents / 100).toFixed(2);
-        $('lookupHint').textContent = '已带出上次的名称、分类、价格，请核对。';
-        updateAmount();
-        if (fromEnter) { $('fQty').focus(); $('fQty').select(); }
-      } else {
+      const hit = await CAT.query(code);                        // 永不抛错；开关关闭时不发请求
+      if (stale()) return;
+      let mem = null, memErr = null;
+      try { mem = await store().lookup(code); } catch (e) { memErr = e; }
+      if (stale()) return;
+      if (!hit && memErr) throw memErr;                         // 与原行为一致：没有商品库命中时，本地存储错误要显示出来
+      const m = CAT.merge(hit, memErr ? null : mem);
+      if (m.source === 'none') {
         $('lookupHint').textContent = '新条码，请填写名称和价格。';
         if (fromEnter) $('fName').focus();
+        return;
       }
-    } catch (e) { $('lookupHint').textContent = e.message; }
+      $('fName').value = m.name;
+      if (m.category) setCategory(m.category, m.source === 'catalog');
+      if (m.priceCents != null) $('fPrice').value = (m.priceCents / 100).toFixed(2);
+      $('lookupHint').textContent = m.source === 'catalog' ? I18N.catalogHint(m.priceFrom) : '已带出上次的名称、分类、价格，请核对。';
+      updateAmount();
+      if (fromEnter) { $('fQty').focus(); $('fQty').select(); }
+    } catch (e) { if (!stale()) $('lookupHint').textContent = e.message; }
   }
   function collectForm() {
     const priceCents = yuanToCents($('fPrice').value), quantity = parseQty($('fQty').value);
@@ -591,6 +602,8 @@
     $('uploadBtn').addEventListener('click', uploadLocal);
     $('downloadBtn').addEventListener('click', downloadCloud);
     $('wipeBtn').addEventListener('click', wipeAll);
+    $('catalogToggle').checked = CAT.isEnabled();
+    $('catalogToggle').addEventListener('change', (e) => { CAT.setEnabled(e.target.checked); });
     $('overlay').addEventListener('click', (e) => { if (e.target === $('overlay')) closeDialog(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDialog(); });
 
