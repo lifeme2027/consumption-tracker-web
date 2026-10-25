@@ -10,6 +10,17 @@
 - **搜索**：POST + JSON 体，避免关键词出现在 URL 与 IIS 访问日志。
 - CSP 里 `style-src-attr 'unsafe-inline'` 仅为兼容 html5-qrcode 的内联样式属性；`script-src` 仍是 `'self'`。
 
+## 默认本地模式（免登录）
+
+- **存储适配层**：`life-local.js`（IndexedDB：库 `life-local`，stores `records` / `products`）与 `life-remote.js`（映射到 `/api`）实现同一组方法（meta / lookup / add / update / remove / restore / query / stats / duplicates / assignBatch / exportJson / exportCsv / importText / wipe），界面与校验共用一份；`life-mode.js` 的 ModeController 决定当前用哪一个。
+- **默认本地**：打开页面不发任何 `/api` 请求（`/api/config` 只在点“登录”时请求；仅当 localStorage `life.mode=cloud`（上次是云端）时才探测一次 `/api/auth/me`）。**没有匿名服务器账号**，服务端 API 鉴权不变（匿名 401），未新增匿名写接口。
+- **登录后不自动同步**：本地与云端互不影响；上传 = 本地 `exportJson()` → 云端 `import`（合并/覆盖，覆盖在服务端同一事务里）；下载 = 云端导出 → 本地 `importText`（合并/覆盖，覆盖先整份预检，有任何一条不合格整体中止、本地不变）。两个按钮都先确认并说明语义。
+- **删除撤销**：界面在删除前持有完整记录；撤销 = `store.restore(records)`（本地 IDB put；云端 `POST /api/records/restore`，≤1000 条，逐条校验，仍受地址隔离与 CSRF 约束）。
+- **重复提醒**：`store.duplicates(barcode, date, excludeId)`：编码非空且同一天已有同编码记录时，保存前确认，可继续。
+- **本地模式的取舍**：数据在浏览器里，清除浏览器数据/无痕/换设备即丢，没有任何找回手段（所以首次打开有“建议定期导出”提示，页面常驻说明）；同浏览器的其他使用者能看到数据；IndexedDB 在个别浏览器的隐私模式不可用时，本地功能会提示改用普通窗口或登录云端。
+- 本地模式遵循与服务端 Core 相同的**严格**校验（不是手机端更宽松的 CSV 容错），保证“本地数据一定能无损上传云端”。
+- 测试：`scripts/js-tests`（node:test + fake-indexeddb，CI 运行）覆盖本地存储、远程适配、模式切换/上传下载语义；`LocalModeFrontendTests` 静态检查本地模块无网络调用、页面无内联脚本/样式、CSP 严格。
+
 ## 已知限制
 
 - 挑战在内存，多实例部署需改为共享存储（目前单实例 IIS，无此问题）。
