@@ -247,7 +247,7 @@
 
   // ---------- IndexedDB ----------
   function req(r) { return new Promise(function (res, rej) { r.onsuccess = function () { res(r.result); }; r.onerror = function () { rej(r.error); }; }); }
-  function txDone(tx) { return new Promise(function (res, rej) { tx.oncomplete = function () { res(); }; tx.onerror = function () { rej(tx.error); }; tx.onabort = function () { rej(tx.error || new Error('事务已中止')); }; }); }
+  function txDone(tx) { return new Promise(function (res, rej) { tx.oncomplete = function () { res(); }; tx.onerror = function () { rej(tx.error || err('存储操作失败', 'Storage operation failed')); }; tx.onabort = function () { rej(tx.error || err('存储事务已中止，未保存', 'Storage transaction aborted; nothing was saved')); }; }); }
 
   function ImportRejected(rejected, total) {
     var e = err('导入已中止：' + rejected.length + ' 条记录不合格，未改动任何现有数据', 'Import aborted: ' + rejected.length + ' records are invalid; your existing data was not changed');

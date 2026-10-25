@@ -229,6 +229,7 @@
     const priceCents = yuanToCents($('fPrice').value), quantity = parseQty($('fQty').value);
     if (!$('fName').value.trim()) return { error: '请填写名称' };
     if (priceCents == null) return { error: '单价无效（小数请用小数点，如 12.50；超过两位小数按四舍五入）' };
+    if (priceCents === 0 && /[1-9]/.test($('fPrice').value)) return { error: '单价过小：不足 0.005 元，四舍五入后会变成 0 分。请输入至少 0.01 元；如果确实免费请填 0' };
     if (quantity == null) return { error: '数量无效（需大于 0，最多 6 位小数）' };
     if (!$('fDate').value) return { error: '请选择日期' };
     return {
@@ -265,7 +266,7 @@
         say('formMsg', '已保存，可继续扫描下一件', 'ok');
       }
       await loadMeta();
-    } catch (e) { say('formMsg', e.message, 'err'); }
+    } catch (e) { say('formMsg', (e && e.message) || '保存失败，请重试', 'err'); }
     finally { $('saveBtn').disabled = false; }
   }
   function startEdit(r) {
@@ -362,7 +363,7 @@
       await loadList(); await loadMeta();
       showToast(`已删除 ${ids.length} 条记录`, async () => {
         try { await st.restore(recs); await loadMeta(); if (!$('tab-history').classList.contains('hidden')) await loadList(); $('listSummary').textContent = `已撤销删除，恢复 ${recs.length} 条`; }
-        catch (e) { $('listSummary').textContent = '撤销失败：' + e.message; }
+        catch (e) { $('listSummary').textContent = '撤销失败：' + ((e && e.message) || '未知错误') + (e && e.restored ? `（已恢复 ${e.restored} 条，其余未恢复，可重新导入备份）` : ''); }
       });
     } catch (e) { $('listSummary').textContent = e.message; }
   }
@@ -406,7 +407,7 @@
   // ---------- 数据：导出 / 导入 / 同步 / 一键删除 ----------
   // 导入/上传/下载的反馈：每个反馈区记住「怎么画」，切换语言时按新语言重画（文案与翻译在 life-i18n.js，可单元测试）
   const feedback = {};
-  function renderList(boxId, list) {
+  function renderFeedbackList(boxId, list) {
     const box = $(boxId); clear(box);
     if (!list) { box.classList.add('hidden'); return; }
     box.append(el('div', { class: 'total', text: list.head }));
@@ -416,10 +417,10 @@
     box.append(ul); box.classList.remove('hidden');
   }
   function setFeedback(msgId, boxId, kind, build) {
-    const draw = () => { const v = build(); say(msgId, v.msg, kind); renderList(boxId, v.list); };
+    const draw = () => { const v = build(); say(msgId, v.msg, kind); renderFeedbackList(boxId, v.list); };
     feedback[msgId] = draw; draw();
   }
-  function clearFeedback(msgId, boxId) { delete feedback[msgId]; say(msgId, ''); renderList(boxId, null); }
+  function clearFeedback(msgId, boxId) { delete feedback[msgId]; say(msgId, ''); renderFeedbackList(boxId, null); }
   function showImportFailure(msgId, boxId, e) { setFeedback(msgId, boxId, 'err', () => I18N.failureView(e)); }
   function showImportResult(msgId, boxId, kind, r) { setFeedback(msgId, boxId, 'ok', () => I18N.resultView(kind, r)); }
   function showImportNote(msgId, boxId, zh, en) { setFeedback(msgId, boxId, 'err', () => ({ msg: I18N.t(zh, en), list: null })); }

@@ -52,12 +52,54 @@
   P.lookup = function (barcode) { return this._json('POST', '/api/products/lookup', { barcode: barcode }); };
   P.add = function (body) { return this._json('POST', '/api/records', body); };
   P.update = function (id, body) { return this._json('PUT', '/api/records/' + encodeURIComponent(id), body); };
+  // 服务端单次上限：delete / restore 各 1000 条，且默认请求体 64KB。客户端分批发送，避免大批量删除后“撤销”因 413 丢数据。
+  var DELETE_CHUNK = 500, RESTORE_CHUNK = 150, RESTORE_BYTES = 48000;
+  function utf8Len(s) { return typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(s).length : unescape(encodeURIComponent(s)).length; }
+  function chunkRecords(records) {
+    var out = [], cur = [], bytes = 0;
+    records.forEach(function (r) {
+      var n = utf8Len(JSON.stringify(r)) + 1;
+      if (cur.length && (cur.length >= RESTORE_CHUNK || bytes + n > RESTORE_BYTES)) { out.push(cur); cur = []; bytes = 0; }
+      cur.push(r); bytes += n;
+    });
+    if (cur.length) out.push(cur);
+    return out;
+  }
+  function sequential(self, chunks, send, field) {
+    var total = 0;
+    return chunks.reduce(function (p, chunk) {
+      return p.then(function () {
+        return send(chunk).then(function (r) { total += (r && r[field]) || 0; });
+      }).catch(function (e) { if (e && typeof e === 'object') e[field] = total; throw e; });
+    }, Promise.resolve()).then(function () { return total; });
+  }
   P.remove = function (ids) {
+    var self = this;
     if (ids.length === 1) return this._json('DELETE', '/api/records/' + encodeURIComponent(ids[0])).then(function (r) { return r.deleted; });
-    return this._json('POST', '/api/records/delete', { ids: ids }).then(function (r) { return r.deleted; });
+    var chunks = []; for (var i = 0; i < ids.length; i += DELETE_CHUNK) chunks.push(ids.slice(i, i + DELETE_CHUNK));
+    return sequential(self, chunks, function (c) { return self._json('POST', '/api/records/delete', { ids: c }); }, 'deleted');
   };
-  P.restore = function (records) { return this._json('POST', '/api/records/restore', { records: records }).then(function (r) { return r.restored; }); };
-  P.query = function (q) { return this._json('POST', '/api/records/query', q || {}); };
+  P.restore = function (records) {
+    var self = this;
+    return sequential(self, chunkRecords(records), function (c) { return self._json('POST', '/api/records/restore', { records: c }); }, 'restored');
+  };
+  // 服务端分页（默认每页 2000、上限 5000）。调用方没指定 limit/offset 时这里自动翻页取全，
+  // 返回的 records 是完整结果；count / totalCents 用服务端对全部命中记录算的合计。
+  P.query = function (q) {
+    var self = this, body = Object.assign({}, q || {});
+    if (body.limit !== undefined || body.offset !== undefined) return self._json('POST', '/api/records/query', body);
+    var all = [], first = null;
+    function page(offset, guard) {
+      return self._json('POST', '/api/records/query', Object.assign({}, body, { offset: offset })).then(function (r) {
+        if (!first) first = r;
+        var got = (r && r.records) || [];
+        all = all.concat(got);
+        if (r && r.hasMore && got.length > 0 && guard < 500) return page(offset + got.length, guard + 1);
+        return Object.assign({}, first, { records: all, returned: all.length, hasMore: false });
+      });
+    }
+    return page(0, 0);
+  };
   P.stats = function (month, day) { return this._json('GET', '/api/stats?month=' + encodeURIComponent(month) + '&day=' + encodeURIComponent(day)); };
   P.duplicates = function (barcode, date, excludeId) {
     var code = (barcode || '').trim();
