@@ -43,6 +43,40 @@
 
 已处理的相关项：I-02 / I-03（Core JSON 的数量与 `priceCents` 上限：专门测试 + `shared-vectors/limits.json` 在两个仓库都被加载并与 Core 常量对照）、I-09（导入错误给出具体的中英文原因）、I-10 / I-11（见桌面 README「扫码使用提示」）。
 
+## 删除与数据保留（M-1）
+
+- **程序做的**：数据库连接一律 `PRAGMA secure_delete=ON`（被删内容在页内擦零）；`DeleteAll`（一键删除）提交后立即 `wal_checkpoint(TRUNCATE)`；`MaintenanceService`（后台服务）每 `Storage:CheckpointMinutes`（默认 60）分钟做一次 checkpoint，每 `Storage:VacuumHours`（默认 24）小时做一次 VACUUM。测试 `SecureDeleteTests` 做了字节级残留检查（删除后在 `.db` 与 `-wal` 里都搜不到明文）。
+- **程序不做的**：不删已存在的备份副本、不管 IIS 日志、不管磁盘层残留（SSD 磨损均衡、卷影/快照）。所以界面与隐私页**不再说“永久/无法恢复”**，而是如实写出 secure_delete / checkpoint / VACUUM 的含义，以及“旧备份不会被删、明文备份最长保留 30 天、IIS 日志最长保留 30 天”。保留期靠 `scripts/ops/cleanup-life.ps1` + 计划任务（DEPLOY.md「数据保留与清理」）保证，**这是运维承诺，需要有人确认计划任务确实在跑**。
+- **`.vacuumed` 标记文件**：上次 VACUUM 的时间记在 `<db>.vacuumed`（`App_Data\life.db.vacuumed`）的修改时间里，所以 IIS 回收 / 站点重启 / 进程崩溃不会让“24 小时”从头计时（否则频繁回收的站点永远不会 VACUUM）。删掉它只会导致下次启动立即 VACUUM 一次，无害；它只含时间，不含数据。回收应用池后第一次维护运行时才会看这个文件。
+- 文案一致性：`wwwroot/app.js` 的 `WIPE_TEXT`、`index.html`、`privacy.html`、`privacy-en.html` 说同一件事；`PrivacyAndDeleteWordingTests` 静态检查：任何前端文件不得出现“永久”“无法恢复”“permanently”“irrecoverable”，隐私页（中英）必须覆盖 12 小时会话、30 天备份、IIS 日志、健康敏感信息、secure_delete / checkpoint / VACUUM，且本地 / 云端分节。
+
+## 网页测试报告：信息级项目与残余风险（未改代码或仅记录）
+
+编号说明：用户口头编号里 **L-8 = 分页、L-10 = 405/415**，与 `web-report.md` 正文（L-8 错误语义、L-10 分页）互换；两项都已实现（L-8：`/api/records/query` 的 `limit`/`offset`，默认 2000、上限 5000，`count/totalCents` 仍是全量合计，另有 `total/hasMore/returned`，客户端自动翻页；L-10：错误方法 405 + `Allow`，错误 Content-Type 415，400/404/405/413/415/500 空体补中英文 JSON）。
+
+| 编号 | 说明 |
+|---|---|
+| L-2 | 导出与普通读共用每 IP 每分钟 300 次的 `api` 限流桶（导出最多 5 万条约 15 MB）。未单独限流，依赖 IIS / 防火墙；需要时给导出加独立桶（如 6/分）。 |
+| L-3 | HTTP:80 → HTTPS 的 301 在 IIS 侧配置（DEPLOY.md 给了 URL Rewrite 规则），仓库 `web.config` 不含；上线后需运维用 `curl -I http://…` 验证。HSTS 只有 `max-age=31536000`，无 `includeSubDomains/preload`。 |
+| L-5 | 证书 `*.kastop.com` 2026-11-29 11:28 UTC（北京时间 19:28）到期，需确认 win-acme 自动续期；服务端仅 TLS 1.2。 |
+| L-9 | 仓库默认 `AllowedHosts: "*"`，生产必须在 `appsettings.Production.json` 设成 `life.kastop.com`（DEPLOY.md 已写，含验证命令）。 |
+| I-1 | `/healthz` 只返回 `ok`，无构建号；线上版本靠静态资源哈希核对。 |
+| I-2 | 会话 Cookie 无 `__Host-` 前缀（有 HttpOnly/Secure/SameSite=Strict/Path=/，无 Domain，固定 12 小时）。 |
+| I-3 | 未登录非 GET 先过 CSRF 守卫得 403 而非 401，与前端“401 → 重新登录”不一致，更严但不一致。 |
+| I-4 | 钓鱼中继：challenge 消息含域名但不绑定来源，依赖用户在钱包弹窗里看到 life.kastop.com。 |
+| I-5 | 无“退出所有设备”入口（`SessionStore.RevokeAll` 存在但未接路由）；一键删除不会使现有会话失效（与隐私页一致）。 |
+| I-6 | `/api/config`、`/healthz`、logout、未知 `/api` 路径、静态文件无应用层限流，依赖 IIS / 防火墙。 |
+| I-7 | 写接口无幂等键，弱网重试会产生重复记录；导入按 id upsert 天然幂等。 |
+| I-8 | 名称含 NUL / 零宽 / RTL-override 字符原样存储，渲染用 `textContent`，只有显示层反转风险；`%` 搜索按 LIKE 通配，只影响自己的数据。 |
+| I-9 | CSP 里 `style-src-attr 'unsafe-inline'` 仅为 html5-qrcode 的内联样式属性；静态 HTML 的 Content-Type 无 charset（页内 `<meta charset>` 兜底）。 |
+| I-10 | IIS 请求过滤直接拦截的路径（`/App_Data/*`、`/bin/`、`/web.config`）返回无头空 404；无 `robots.txt` / `security.txt`（建议提供安全联系渠道）。 |
+| I-11 | CSV 公式注入防护：`CsvService.GuardText/UnguardText`（单引号前缀），Excel 中会看到前导 `'`。 |
+| I-12 | 应用没有审计表，删除事件不留痕，无法事后审计“谁在何时删了数据”。 |
+
+**残余风险：分布式攻击者的 challenge 占位。** 每 IP 每分钟最多 10 个 challenge、全局待用上限 20000；上限满时现在是**淘汰最旧项**（M-2 修复，不再让全站新登录 429），所以不再有“占满即全站登录失败”，但分布式攻击者（≥2000 个 IP）仍能让**较早发出、尚未用完的 challenge 被挤掉**，表现为部分用户签名后验证失败、需重新点登录（重试即可）。要彻底解决需要 challenge 绑定来源（IP / 会话）或验证码，成本较高，目前接受该风险。
+
+**偶发测试失败 `ImportRejectionTests(qtyBig)` 的调查结论**：不是负载，也不是测试间共享限流，而是一个**生产缺陷**——`KaspaMessageSigner.DecodeSignature` 遇到以 `0x` 开头的 130 字符签名就去掉前缀，而随机生成的 base64 签名约每 2000 次有 1 次恰好以 `0x` 开头，被误剥后验证失败 → 401。现已改为只有十六进制解析成功才剥前缀，否则按 base64 处理（`SignatureDecodeTests`）。同一份签名代码最初来自 xiangqi-dotnet，那几个项目里很可能存在同样的缺陷（未改动，建议另行处理）。附带：测试清理里原来用全局 `SqliteConnection.ClearAllPools`，会影响并行用例，已改成按库清理（`Database.ClearPoolFor`）。
+
 ## 已知限制
 
 - 挑战在内存，多实例部署需改为共享存储（目前单实例 IIS，无此问题）。
@@ -51,6 +85,7 @@
 - 相机扫码需要 HTTPS（或 localhost）。
 - 签名 / 地址代码复用自 xiangqi-dotnet，已用官方向量和自生成密钥测试，但**未与真实 KasWare 钱包做端到端验证**。
 - 数据**未做端到端加密**，服务器端可读取明文。
+- 隐私页的 30 天备份 / IIS 日志保留期靠运维计划任务保证（见 DEPLOY.md），程序本身不会清理备份与 IIS 日志。
 
 ## 二期：端到端加密（E2E）
 
