@@ -5,6 +5,7 @@
 - **会话 token**：256 位随机数，库中只存 SHA-256；固定过期；重启 / IIS 回收后会话仍有效。
 - **挑战（challenge）**：保存在进程内存，一次性、短有效期、有待用数量上限；进程重启后未使用的挑战作废（用户重新点登录即可）。
 - **金额**：全程整数“分”；小计 = round(单价分 × 数量)，四舍五入远离零。
+- **三端一致的输入规则**（价格→分按十进制字符串精确解析 + half-up，严格千分位，数量最多 6 位小数）见 `shared-vectors/README.md`；向量 `shared-vectors/money.json`、`quantity.json` 与桌面仓库逐字节相同，C# 的 `MoneyTests` 与前端 `scripts/test-money.js`（`wwwroot/money.js`）都逐条校验。
 - **隔离**：地址作为每条 SQL 的条件与主键一部分；没有“按 id 全局取记录”的代码路径。
 - **搜索**：POST + JSON 体，避免关键词出现在 URL 与 IIS 访问日志。
 - CSP 里 `style-src-attr 'unsafe-inline'` 仅为兼容 html5-qrcode 的内联样式属性；`script-src` 仍是 `'self'`。
