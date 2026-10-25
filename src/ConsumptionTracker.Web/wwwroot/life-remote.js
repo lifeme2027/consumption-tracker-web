@@ -24,7 +24,11 @@
           if (res.status === 401) self.onUnauthorized();
           if (!res.ok) {
             var e = new Error((data && data.error) || ('请求失败（' + res.status + '）'));
-            e.status = res.status; if (data) { e.data = data; if (data.rejected) e.rejected = data.rejected; }
+            e.status = res.status; if (data) {
+              e.data = data;
+              if (data.rejected) { e.rejected = data.rejected; e.total = data.total; e.rejectedCount = data.rejectedCount; }   // 覆盖导入预检失败：逐条原因
+              if (data.errorEn) e.messageEn = data.errorEn;
+            }
             throw e;
           }
           return { data: data, res: res };

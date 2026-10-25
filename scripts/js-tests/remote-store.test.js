@@ -61,3 +61,19 @@ test('重复提醒（云端）：按同日同编码过滤，排除自身', async
   assert.deepStrictEqual((await s.duplicates('1', 'd', 'a')).map((r) => r.id), ['b']);
   assert.deepStrictEqual(await s.duplicates('', 'd'), []);
 });
+
+test('覆盖导入 422：错误带逐条原因（rejected/total/rejectedCount/messageEn）；合并结果原样带 skippedRows', async () => {
+  const body = {
+    error: '导入已中止：3 条中有 1 条不合格，现有数据没有任何改动', errorEn: 'Import aborted: 1 of 3 records are invalid; your existing data was not changed',
+    rejected: [{ row: 2, label: '第 2 条', labelEn: 'Record #2', reason: '备注过长（最多 1000 字）', reasonEn: 'Note too long (max 1000 characters)' }], rejectedCount: 1, total: 3,
+  };
+  const s = new RemoteStore({ fetch: fakeFetch(() => ({ status: 422, json: body })) });
+  await assert.rejects(() => s.importText('{}', 'replace'), (e) =>
+    e.status === 422 && e.rejected.length === 1 && e.rejected[0].row === 2 && e.rejected[0].label === '第 2 条' &&
+    e.total === 3 && e.rejectedCount === 1 && /没有任何改动/.test(e.message) && /Import aborted/.test(e.messageEn));
+  const ok = { added: 2, updated: 0, skipped: 1, total: 3, skippedRows: [{ row: 2, label: '第 2 条', reason: '数量过大' }] };
+  const m = new RemoteStore({ fetch: fakeFetch(() => ({ status: 200, json: ok })) });
+  const r = await m.importText('{}', 'merge');
+  assert.deepStrictEqual(r.skippedRows, ok.skippedRows);
+  assert.strictEqual(r.skipped, 1);
+});

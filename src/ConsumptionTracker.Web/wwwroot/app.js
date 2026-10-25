@@ -406,13 +406,14 @@
 
   // ---------- 数据：导出 / 导入 / 同步 / 一键删除 ----------
   const MAX_SHOW = 8;
-  function renderProblems(boxId, head, rows) {
+  function renderProblems(boxId, head, rows, count) {
     const box = $(boxId); clear(box);
     if (!rows || !rows.length) { box.classList.add('hidden'); return; }
     box.append(el('div', { class: 'total', text: head }));
     const ul = el('ul');
     for (const x of rows.slice(0, MAX_SHOW)) ul.append(el('li', { text: `${x.label || '第 ' + x.row + ' 条'}：${x.reason}` }));
-    if (rows.length > MAX_SHOW) ul.append(el('li', { text: `……另有 ${rows.length - MAX_SHOW} 条未列出（共 ${rows.length} 条）` }));
+    const all = count != null ? count : rows.length;   // 服务端只回传前若干行，总数另给
+    if (all > MAX_SHOW) ul.append(el('li', { text: `……另有 ${all - MAX_SHOW} 条未列出（共 ${all} 条）` }));
     box.append(ul); box.classList.remove('hidden');
   }
   function importSummary(prefix, r) {
@@ -421,13 +422,14 @@
   function showImportFailure(msgId, boxId, e) {
     const rows = e.rejected || null;
     if (rows && rows.length) {
-      say(msgId, `导入已中止：${e.total != null ? `共 ${e.total} 条中有 ` : ''}${rows.length} 条不合格，现有数据没有任何改动。`, 'err');
-      renderProblems(boxId, `不合格的记录（共 ${rows.length} 条，下面最多列出前 ${MAX_SHOW} 条）`, rows);
+      const n = e.rejectedCount != null ? e.rejectedCount : rows.length;
+      say(msgId, `导入已中止：${e.total != null ? `共 ${e.total} 条中有 ` : ''}${n} 条不合格，现有数据没有任何改动。`, 'err');
+      renderProblems(boxId, `不合格的记录（共 ${n} 条，下面最多列出前 ${MAX_SHOW} 条）`, rows, n);
     } else { say(msgId, e.message, 'err'); $(boxId).classList.add('hidden'); }
   }
   function showImportResult(msgId, boxId, prefix, r) {
     say(msgId, importSummary(prefix, r), 'ok');
-    renderProblems(boxId, `被跳过的记录（共 ${r.skipped} 条，下面最多列出前 ${MAX_SHOW} 条）`, r.skippedRows);
+    renderProblems(boxId, `被跳过的记录（共 ${r.skipped} 条，下面最多列出前 ${MAX_SHOW} 条）`, r.skippedRows, r.skipped);
   }
   function download(name, text, mime) {
     const url = URL.createObjectURL(new Blob([text], { type: mime }));
