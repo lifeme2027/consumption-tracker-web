@@ -12,6 +12,9 @@ main{max-width:860px;margin:0 auto;padding:12px}
 .card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:14px}
 h2{font-size:18px;margin:0 0 10px}h3{font-size:15px;margin:14px 0 6px}
 label{display:block;font-size:14px;color:var(--mut);margin:8px 0}
+.req{font-weight:700;color:var(--fg)}
+.req::after{content:" *";color:#d00}
+.req-mark{color:#d00;font-weight:700}
 label.inline{display:inline-flex;align-items:center;gap:6px;margin:4px 12px 4px 0;color:var(--fg)}
 input,select,textarea{width:100%;font:inherit;font-size:16px;padding:9px 10px;border:1px solid var(--bd);border-radius:8px;background:#fff;color:var(--fg);margin-top:3px}
 input[type=checkbox],input[type=radio]{width:auto;margin:0}

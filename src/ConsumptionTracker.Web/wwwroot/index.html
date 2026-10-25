@@ -73,14 +73,14 @@
           </div>
         </label>
         <p id="lookupHint" class="hint"></p>
-        <label>名称 <input id="fName" type="text" maxlength="100" required></label>
+        <label><span class="req">名称</span> <input id="fName" type="text" maxlength="100" required aria-required="true"></label>
         <div class="grid2">
-          <label>单价（元） <input id="fPrice" type="text" inputmode="decimal" placeholder="0.00" required></label>
-          <label>数量 <input id="fQty" type="text" inputmode="decimal" value="1" required></label>
+          <label><span class="req">单价（元）</span> <input id="fPrice" type="text" inputmode="decimal" placeholder="0.00" required aria-required="true"></label>
+          <label><span class="req">数量</span> <input id="fQty" type="text" inputmode="decimal" value="1" required aria-required="true"></label>
         </div>
         <div class="grid2">
           <label>分类 <select id="fCategory"></select></label>
-          <label>日期 <input id="fDate" type="date" required></label>
+          <label><span class="req">日期</span> <input id="fDate" type="date" required aria-required="true"></label>
         </div>
         <div class="grid2">
           <label>用药人 <input id="fPatient" type="text" maxlength="40" placeholder="药品类可填"></label>
@@ -95,6 +95,7 @@
           <button id="clearBtn" class="btn" type="button">清空</button>
           <button id="cancelEditBtn" class="btn hidden" type="button">取消编辑</button>
         </div>
+        <p class="hint req-note"><span class="req-mark">*</span> 为必填</p>
         <p id="formMsg" class="msg" role="status"></p>
       </form>
     </section>
