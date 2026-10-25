@@ -1,0 +1,94 @@
+[
+ {
+  "input": "1",
+  "quantity": "1"
+ },
+ {
+  "input": "2.5",
+  "quantity": "2.5"
+ },
+ {
+  "input": "0.5",
+  "quantity": "0.5"
+ },
+ {
+  "input": "0.000001",
+  "quantity": "0.000001"
+ },
+ {
+  "input": "0.123456",
+  "quantity": "0.123456"
+ },
+ {
+  "input": "1.50",
+  "quantity": "1.50"
+ },
+ {
+  "input": "12.345678",
+  "quantity": "12.345678"
+ },
+ {
+  "input": "1000000",
+  "quantity": "1000000"
+ },
+ {
+  "input": "007",
+  "quantity": "7"
+ },
+ {
+  "input": "0",
+  "quantity": null
+ },
+ {
+  "input": "0.0",
+  "quantity": null
+ },
+ {
+  "input": "0.0000001",
+  "quantity": null
+ },
+ {
+  "input": "1.1234567",
+  "quantity": null
+ },
+ {
+  "input": "1000000.000001",
+  "quantity": null
+ },
+ {
+  "input": "1000001",
+  "quantity": null
+ },
+ {
+  "input": "-1",
+  "quantity": null
+ },
+ {
+  "input": "",
+  "quantity": null
+ },
+ {
+  "input": "abc",
+  "quantity": null
+ },
+ {
+  "input": "1,5",
+  "quantity": null
+ },
+ {
+  "input": "1,000",
+  "quantity": null
+ },
+ {
+  "input": ".5",
+  "quantity": null
+ },
+ {
+  "input": "5.",
+  "quantity": null
+ },
+ {
+  "input": "1e2",
+  "quantity": null
+ }
+]

@@ -11,6 +11,9 @@
     <Using Include="Xunit" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="..\..\shared-vectors\*.json" Link="shared-vectors\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\src\ConsumptionTracker.Web\ConsumptionTracker.Web.csproj" />
   </ItemGroup>
 </Project>
