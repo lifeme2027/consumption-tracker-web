@@ -62,7 +62,7 @@ public static class CsvService
 
     private static string Yuan(long cents) => (cents / 100m).ToString("0.00", CultureInfo.InvariantCulture);
 
-    /// <summary>RFC 4180 解析（支持引号、转义引号、字段内换行、BOM）。</summary>
+    /// <summary>RFC 4180 解析（支持引号、转义引号、字段内换行、BOM）。引号内的 \r\n / \r / \n 原样保留；引号外 CRLF、单独 \r、\n 都算换行。</summary>
     public static List<List<string>> ParseRows(string text)
     {
         if (text.Length > 0 && text[0] == '\uFEFF') text = text[1..];
@@ -88,7 +88,8 @@ public static class CsvService
             {
                 case '"': inQuotes = true; any = true; break;
                 case ',': row.Add(field.ToString()); field.Clear(); any = true; break;
-                case '\r': break;
+                case '\r' when i + 1 < text.Length && text[i + 1] == '\n': break; // CRLF：由随后的 \n 结束本行
+                case '\r':   // 单独的 \r（旧 Mac 风格换行）同样结束本行，不再被悄悄丢弃
                 case '\n':
                     if (any || field.Length > 0) { row.Add(field.ToString()); rows.Add(row); }
                     row = new List<string>(); field.Clear(); any = false;
