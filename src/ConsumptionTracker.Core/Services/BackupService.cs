@@ -86,6 +86,7 @@ public static class BackupService
 
         if (root is not JsonObject obj || Str(obj["app"]) != AppId || obj["records"] is not JsonArray recs)
             throw ImportFormat.Error("不是本应用导出的备份文件", "This is not a backup file exported by this app");
+        CheckVersion(obj["version"]);
 
         var records = new List<RecordItem>();
         var issues = new List<ImportIssue>();
@@ -105,14 +106,34 @@ public static class BackupService
         return new ImportResult(records, products, issues.Count) { Issues = issues };
     }
 
+    /// <summary>
+    /// 备份版本号必须是 JSON 数字且为 1..<see cref="Version"/> 的整数（v1/v2 兼容）：
+    /// 缺失、非数字（含字符串）、小数、小于 1 一律拒绝；高于本应用支持的版本拒绝并提示升级。
+    /// </summary>
+    private static void CheckVersion(JsonNode? node)
+    {
+        if (node is JsonValue v && v.GetValueKind() == JsonValueKind.Number && v.TryGetValue<decimal>(out var d) && d == decimal.Truncate(d) && d >= 1)
+        {
+            if (d <= Version) return;
+            throw ImportFormat.Error(VersionNewer.Zh, VersionNewer.En);
+        }
+        throw ImportFormat.Error(VersionInvalid.Zh, VersionInvalid.En);
+    }
+
+    public static readonly RuleProblem VersionInvalid = new("备份文件的版本号无效（version 必须是整数 1 或 2）", "The backup file's version is invalid (version must be the integer 1 or 2)");
+    public static readonly RuleProblem VersionNewer = new("备份文件的版本高于本应用支持的版本（最高 2），请先升级应用后再导入", "This backup was made by a newer version of the app (this app supports up to version 2); please upgrade the app and import again");
+    public static readonly RuleProblem FractionalPriceCents = new("价格（priceCents）必须是整数分，不能有小数", "priceCents must be a whole number of cents (no decimals)");
+
     private static (RecordItem?, RuleProblem?) ParseRecord(JsonNode? node)
     {
         if (node is not JsonObject o) return (null, new("记录内容无效（不是对象）", "Invalid record (not an object)"));
         long priceCents;
         if (TryNumber(o["priceCents"], out var pc) && pc >= 0)
         {
+            // 小数分不静默取整，也不退回 price：该行无效
+            if (pc != decimal.Truncate(pc)) return (null, FractionalPriceCents);
             if (pc > RecordLimits.MaxPriceCents) return (null, TooBigPrice);
-            priceCents = (long)Math.Round(pc, MidpointRounding.AwayFromZero);
+            priceCents = (long)pc;
         }
         else if (TryNumber(o["price"], out var py) && py >= 0)
         {
@@ -151,7 +172,8 @@ public static class BackupService
         var barcode = Str(o["barcode"]).Trim();
         if (barcode == "") return null;
         long? last = null;
-        if (TryNumber(o["lastPriceCents"], out var lc) && lc >= 0) last = (long)Math.Round(lc, MidpointRounding.AwayFromZero);
+        if (TryNumber(o["lastPriceCents"], out var lc) && lc >= 0)
+            last = lc == decimal.Truncate(lc) && lc <= long.MaxValue ? (long)lc : null;   // 小数分不取整：忽略这条价格记忆
         else if (TryNumber(o["lastPrice"], out var ly) && ly >= 0) last = Money.ToCents(ly);
         return new Product
         {

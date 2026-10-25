@@ -192,9 +192,18 @@ public class SharedLimitsAndReasonsTests
             Rec("1", "1", $",\"batchId\":\"b\",\"batchName\":\"{B(61)}\""),
             Rec("1", "1", $",\"patient\":\"{B(41)}\""),
             Rec("1", "1", $",\"dosage\":\"{B(61)}\""),
+            "{\"name\":\"a\",\"priceCents\":12.5,\"quantity\":1,\"date\":\"2026-10-01\"}",   // 小数分：不取整
         };
         foreach (var r in recs)
             foreach (var i in Json(r).Issues) yield return (i.Reason, i.ReasonEn);
+
+        // 整个文件级别的版本号 / 空覆盖原因
+        foreach (var v in new[] { "", ",\"version\":\"abc\"", ",\"version\":99" })
+        {
+            var e = Assert.Throws<InvalidDataException>(() => BackupService.ParseJson("{\"app\":\"consumption-tracker\"" + v + ",\"records\":[],\"products\":[]}"));
+            yield return (e.Message, ImportFormat.English(e)!);
+        }
+        yield return (EmptyReplaceException.Reason.Zh, EmptyReplaceException.Reason.En);
 
         var csv = new[]
         {

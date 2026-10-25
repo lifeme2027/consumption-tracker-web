@@ -40,6 +40,20 @@ public sealed class ImportRejectedException : InvalidOperationException
 }
 
 /// <summary>
+/// 覆盖导入的文件里没有任何记录：覆盖会清空现有数据，所以拒绝，没有改动任何数据。
+/// 要清空数据请用「删除全部数据」之类的专门功能。继承 InvalidOperationException（同 <see cref="ImportRejectedException"/>）。
+/// </summary>
+public sealed class EmptyReplaceException : InvalidOperationException
+{
+    public static readonly RuleProblem Reason = new(
+        "文件中没有任何记录，覆盖导入不能用来清空数据，已拒绝（现有数据没有任何改动）",
+        "The file contains no records; a replace-import cannot be used to clear data, so it was rejected (your existing data was not changed)");
+
+    public EmptyReplaceException() : base(Reason.Zh) { }
+    public string MessageEn => Reason.En;
+}
+
+/// <summary>
 /// 导入文件整体不可用（不是本应用的备份、缺少必需列等）时抛出的异常：类型仍是 InvalidDataException（中文消息），
 /// 英文消息放在 Data["en"]，调用方用 <see cref="English"/> 取出。
 /// </summary>
