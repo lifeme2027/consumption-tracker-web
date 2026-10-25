@@ -30,6 +30,9 @@ public static class Endpoints
             },
         }));
 
+        // 商品库只读查询（POST、无需登录、不读 Cookie、不记录条码）
+        api.MapCatalogLookup();
+
         // ---------------- 登录 ----------------
         var auth = api.MapGroup("/auth");
 
