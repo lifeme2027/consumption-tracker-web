@@ -281,6 +281,8 @@ public sealed class UserRepository : IRecordRepository
         var n = x.Exec("DELETE FROM records WHERE address = $a", tx);
         x.Exec("DELETE FROM products WHERE address = $a", tx);
         tx.Commit();
+        // 删除即真删：secure_delete 已擦零，再把 WAL 并回并截断，已删内容不会残留在 -wal 里
+        _db.Checkpoint();
         return n;
     }
 

@@ -36,6 +36,10 @@ public sealed class LifeOptions
         public string DataDir { get; set; } = "App_Data";
         public string DatabaseFile { get; set; } = "life.db";
         public int MaxRecordsPerUser { get; set; } = 50000;
+        /// <summary>定期 WAL 检查点（TRUNCATE）的间隔（分钟）。0 = 关闭。</summary>
+        public int CheckpointMinutes { get; set; } = 60;
+        /// <summary>定期 VACUUM 的间隔（小时）。0 = 关闭。</summary>
+        public int VacuumHours { get; set; } = 24;
     }
 
     public sealed class CookieSection
