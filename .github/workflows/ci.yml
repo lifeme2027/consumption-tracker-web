@@ -1,0 +1,47 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Restore
+        run: dotnet restore
+      - name: Build
+        run: dotnet build -c Release --no-restore
+      - name: Test
+        run: dotnet test -c Release --no-build --logger "trx;LogFileName=test-results.trx" --results-directory TestResults
+      - name: Smoke (Kestrel + curl)
+        run: bash scripts/smoke.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: TestResults/*.trx
+      - name: Publish (win-x64, framework-dependent)
+        run: dotnet publish src/ConsumptionTracker.Web -c Release -r win-x64 --self-contained false -o publish/life
+      - name: Check package contents
+        run: |
+          set -e
+          test -f publish/life/web.config
+          grep -qF 'processPath=".\ConsumptionTrackerWeb.exe"' publish/life/web.config
+          grep -q 'hostingModel="inprocess"' publish/life/web.config
+          test -f publish/life/ConsumptionTrackerWeb.exe
+          test -f publish/life/wwwroot/index.html
+          test -f publish/life/wwwroot/vendor/html5-qrcode.min.js
+          test ! -e publish/life/App_Data
+          test ! -e publish/life/appsettings.Production.json
+          find publish/life -name '*.db*' | grep -q . && exit 1 || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: life-win-x64-framework-dependent
+          path: publish/life
+          if-no-files-found: error
