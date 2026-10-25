@@ -67,9 +67,10 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler(e => e.Run(async ctx =>
     {
         ctx.Response.StatusCode = 500;
-        await ctx.Response.WriteAsJsonAsync(new { error = "服务器内部错误" });
+        await ctx.Response.WriteAsJsonAsync(ConsumptionTracker.Web.Api.ApiErrors.Body(500));
     }));
 }
+app.UseApiStatusBodies();
 app.UseRateLimiter();
 app.UseApiGuards(options);
 app.UseDefaultFiles();
@@ -77,7 +78,7 @@ app.UseStaticFiles();
 
 app.MapGet("/healthz", () => Results.Text("ok"));
 app.MapLifeApi(options);
-app.Map("/api/{**rest}", () => Results.Json(new { error = "接口不存在" }, statusCode: 404));
+app.MapApiFallback();
 
 app.Run();
 
