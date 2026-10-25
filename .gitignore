@@ -13,3 +13,4 @@ App_Data/
 *.zip
 appsettings.Production.json
 appsettings.Development.local.json
+node_modules/

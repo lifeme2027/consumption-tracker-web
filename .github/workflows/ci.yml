@@ -21,6 +21,11 @@ jobs:
         run: dotnet test -c Release --no-build --logger "trx;LogFileName=test-results.trx" --results-directory TestResults
       - name: JS money vectors (shared-vectors)
         run: node scripts/test-money.js
+      - name: JS tests (本地存储适配层 / 远程适配层 / 模式切换)
+        run: |
+          cd scripts/js-tests
+          npm ci
+          node --test
       - name: Smoke (Kestrel + curl)
         run: bash scripts/smoke.sh
       - uses: actions/upload-artifact@v4
