@@ -63,7 +63,7 @@ public class RepositoryTests : IDisposable
         Assert.Throws<ArgumentException>(() => repo.Add(R(name: new string('x', 101))));
         Assert.Throws<ArgumentException>(() => repo.Add(R(cents: RecordLimits.MaxPriceCents + 1)));
         Assert.Throws<ArgumentException>(() => repo.Add(R(qty: 1_000_001m)));
-        Assert.Throws<ArgumentException>(() => repo.Add(R(qty: 0.00001m)));
+        Assert.Throws<ArgumentException>(() => repo.Add(R(qty: 0.0000001m)));
         Assert.Equal(0, repo.Count());
     }
 

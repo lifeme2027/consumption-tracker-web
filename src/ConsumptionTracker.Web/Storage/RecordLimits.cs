@@ -1,4 +1,5 @@
 using ConsumptionTracker.Core.Models;
+using ConsumptionTracker.Core.Services;
 
 namespace ConsumptionTracker.Web.Storage;
 
@@ -13,8 +14,8 @@ public static class RecordLimits
     public const int MaxBatchName = 60;
     public const int MaxPatient = 40;
     public const int MaxDosage = 60;
-    public const long MaxPriceCents = 100_000_000_000L; // 10 亿元
-    public const decimal MaxQuantity = 1_000_000m;
+    public const long MaxPriceCents = Money.MaxPriceCents;   // 10 亿元（三端统一，见 shared-vectors）
+    public const decimal MaxQuantity = Money.MaxQuantity;
 
     /// <summary>返回中文错误；null 表示通过。不在错误信息中回显记录内容。</summary>
     public static string? Check(RecordItem r)
@@ -29,7 +30,7 @@ public static class RecordLimits
         if (r.Dosage.Length > MaxDosage) return "剂量/规格过长";
         if (r.PriceCents > MaxPriceCents) return "价格过大";
         if (r.Quantity > MaxQuantity) return "数量过大";
-        if (decimal.Round(r.Quantity, 4) != r.Quantity) return "数量最多 4 位小数";
+        if (decimal.Round(r.Quantity, Money.MaxQuantityDecimals) != r.Quantity) return $"数量最多 {Money.MaxQuantityDecimals} 位小数";
         return null;
     }
 }

@@ -23,8 +23,8 @@ public sealed class RecordDraft
         errors = new List<string>();
         record = null;
         if (string.IsNullOrWhiteSpace(Name)) errors.Add("请填写商品名");
-        if (!Money.TryParseYuan(PriceText, out var cents)) errors.Add("价格无效（需为不小于 0 的数字）");
-        if (!Money.TryParseQuantity(QuantityText, out var qty)) errors.Add("数量无效（需大于 0）");
+        if (!Money.TryParseYuan(PriceText, out var cents)) errors.Add(Money.PriceFormatHint);
+        if (!Money.TryParseQuantity(QuantityText, out var qty)) errors.Add(Money.QuantityFormatHint);
         if (!DateUtil.IsValid(Date)) errors.Add("日期无效（格式 YYYY-MM-DD）");
         if (errors.Count > 0) return false;
 
@@ -49,7 +49,7 @@ public sealed class RecordDraft
         Barcode = r.Barcode,
         Name = r.Name,
         PriceText = (r.PriceCents / 100m).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
-        QuantityText = r.Quantity.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture),
+        QuantityText = Money.FormatQuantity(r.Quantity),
         Category = r.Category,
         Note = r.Note,
         Date = r.Date,
