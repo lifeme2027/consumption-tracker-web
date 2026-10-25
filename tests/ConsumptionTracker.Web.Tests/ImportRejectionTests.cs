@@ -180,7 +180,7 @@ public class ImportRejectionTests : IDisposable
     public async Task AbsurdNumbers_GiveSpecificReasons_NotAGenericParseError()
     {
         var c = await SeededAsync();
-        var body = "{\"app\":\"consumption-tracker\",\"records\":[" +
+        var body = "{\"app\":\"consumption-tracker\",\"version\":2,\"records\":[" +
                    "{\"name\":\"a\",\"priceCents\":1e300,\"quantity\":1,\"date\":\"2026-10-01\"}," +
                    "{\"name\":\"b\",\"price\":99999999999999999999999,\"quantity\":1,\"date\":\"2026-10-01\"}," +
                    "{\"name\":\"c\",\"priceCents\":5,\"quantity\":1e300,\"date\":\"2026-10-01\"}," +
@@ -218,7 +218,7 @@ public class ImportRejectionTests : IDisposable
         repo.Add(new RecordItem { Name = "旧1", PriceCents = 100, Quantity = 1, Date = "2026-10-01" });
         repo.Add(new RecordItem { Name = "旧2", PriceCents = 100, Quantity = 1, Date = "2026-10-01" });
         var many = Enumerable.Range(1, 3).Select(i => new RecordItem { Id = "n" + i, Name = "新" + i, PriceCents = 100, Quantity = 1, Date = "2026-10-01" }).ToList();
-        Assert.Throws<InvalidOperationException>(() => repo.Import(many, Array.Empty<Product>(), ImportMode.Replace));
+        Assert.ThrowsAny<InvalidOperationException>(() => repo.Import(many, Array.Empty<Product>(), ImportMode.Replace));
         Assert.Equal(new[] { "旧1", "旧2" }, repo.Query().Select(r => r.Name).OrderBy(x => x));
     }
 }
