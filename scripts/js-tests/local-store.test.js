@@ -193,3 +193,25 @@ test('shared-vectors：金额/数量规则（money.js）与 CSV 防注入向量�
     assert.strictEqual(L.unguardText(cell), text, JSON.stringify(cell));
   }
 });
+
+test('LM-L1：事务出错/中止而 tx.error 为 null 时，txDone 仍给出带 message 的 Error（不抛 TypeError）', async () => {
+  const { L } = require('./helpers');
+  const store = new L.LocalStore({
+    transaction() {
+      const objectStore = { count: () => { const r = {}; setTimeout(() => { r.result = 1; r.onsuccess && r.onsuccess(); }, 0); return r; }, delete() {} };
+      const tx = { error: null, objectStore: () => objectStore };
+      setTimeout(() => { tx.error = null; tx.onabort && tx.onabort(); }, 5);
+      return tx;
+    },
+  });
+  await assert.rejects(() => store.remove(['x']), (e) => e instanceof Error && !(e instanceof TypeError) && typeof e.message === 'string' && e.message.length > 0);
+  const store2 = new L.LocalStore({
+    transaction() {
+      const objectStore = { count: () => { const r = {}; setTimeout(() => { r.result = 1; r.onsuccess && r.onsuccess(); }, 0); return r; }, delete() {} };
+      const tx = { error: null, objectStore: () => objectStore };
+      setTimeout(() => { tx.onerror && tx.onerror(); }, 5);
+      return tx;
+    },
+  });
+  await assert.rejects(() => store2.remove(['x']), (e) => e instanceof Error && typeof e.message === 'string' && e.message.length > 0);
+});

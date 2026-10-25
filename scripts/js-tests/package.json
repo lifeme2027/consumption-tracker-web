@@ -2,6 +2,11 @@
   "name": "life-web-js-tests",
   "private": true,
   "description": "网站前端（本地存储/云端适配层/模式切换）的 node 测试，CI 里 npm ci && node --test",
-  "scripts": { "test": "node --test" },
-  "devDependencies": { "fake-indexeddb": "^6.0.0" }
+  "scripts": {
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "acorn": "^8.19.0",
+    "fake-indexeddb": "^6.0.0"
+  }
 }
