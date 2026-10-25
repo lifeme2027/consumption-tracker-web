@@ -1,0 +1,90 @@
+[
+ {
+  "text": "=1+1",
+  "cell": "'=1+1"
+ },
+ {
+  "text": "+1",
+  "cell": "'+1"
+ },
+ {
+  "text": "-1",
+  "cell": "'-1"
+ },
+ {
+  "text": "@SUM(A1)",
+  "cell": "'@SUM(A1)"
+ },
+ {
+  "text": "\t=x",
+  "cell": "'\t=x"
+ },
+ {
+  "text": "\r=x",
+  "cell": "'\r=x"
+ },
+ {
+  "text": "'=x",
+  "cell": "''=x"
+ },
+ {
+  "text": "''@x",
+  "cell": "'''@x"
+ },
+ {
+  "text": "'+1",
+  "cell": "''+1"
+ },
+ {
+  "text": "'abc",
+  "cell": "'abc"
+ },
+ {
+  "text": "abc",
+  "cell": "abc"
+ },
+ {
+  "text": "",
+  "cell": ""
+ },
+ {
+  "text": "a=b",
+  "cell": "a=b"
+ },
+ {
+  "text": "-",
+  "cell": "'-"
+ },
+ {
+  "text": " =1",
+  "cell": " =1"
+ },
+ {
+  "text": "中文",
+  "cell": "中文"
+ },
+ {
+  "text": "'",
+  "cell": "'"
+ },
+ {
+  "text": "''",
+  "cell": "''"
+ },
+ {
+  "text": "=HYPERLINK(\"http://x\",\"y\")",
+  "cell": "'=HYPERLINK(\"http://x\",\"y\")"
+ },
+ {
+  "text": "-5度饮料",
+  "cell": "'-5度饮料"
+ },
+ {
+  "text": "@",
+  "cell": "'@"
+ },
+ {
+  "text": "\n=x",
+  "cell": "\n=x"
+ }
+]

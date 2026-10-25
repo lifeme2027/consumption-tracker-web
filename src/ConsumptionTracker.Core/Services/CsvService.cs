@@ -18,6 +18,27 @@ public static class CsvService
     public static string Escape(string v) =>
         v.IndexOfAny(new[] { ',', '"', '\r', '\n' }) >= 0 ? "\"" + v.Replace("\"", "\"\"") + "\"" : v;
 
+    private static bool IsTrigger(char c) => c is '=' or '+' or '-' or '@' or '\t' or '\r';
+
+    /// <summary>
+    /// 防 CSV 公式注入（文本列）：若以若干个 ' 之后紧跟 = + - @ \t \r 开头，整体前加一个 '。
+    /// 与 <see cref="UnguardText"/> 互逆（'=x 也能无损往返）。数值列不要调用。
+    /// </summary>
+    public static string GuardText(string v)
+    {
+        var i = 0;
+        while (i < v.Length && v[i] == '\'') i++;
+        return i < v.Length && IsTrigger(v[i]) ? "'" + v : v;
+    }
+
+    /// <summary>导入还原：仅当「一串 ' 之后紧跟触发字符」时去掉一个前导 '，其余文本（如 it's、'hello）原样保留。</summary>
+    public static string UnguardText(string v)
+    {
+        var i = 0;
+        while (i < v.Length && v[i] == '\'') i++;
+        return i > 0 && i < v.Length && IsTrigger(v[i]) ? v[1..] : v;
+    }
+
     public static string ToCsv(IEnumerable<RecordItem> records)
     {
         var sorted = records.OrderBy(r => r.Date, StringComparer.Ordinal).ThenBy(r => r.CreatedAt);
@@ -25,13 +46,14 @@ public static class CsvService
         sb.Append(string.Join(",", Header.Select(Escape))).Append("\r\n");
         foreach (var r in sorted)
         {
+            // 文本列经 GuardText 防公式注入；单价/数量/金额是数值列，绝不加前缀
             string[] cols =
             {
-                r.Date, r.Barcode, r.Name, r.Category,
+                GuardText(r.Date), GuardText(r.Barcode), GuardText(r.Name), GuardText(r.Category),
                 Yuan(r.PriceCents),
-                r.Quantity.ToString("0.####", CultureInfo.InvariantCulture),
+                Money.FormatQuantity(r.Quantity),
                 Yuan(r.AmountCents),
-                r.BatchName, r.BatchId, r.Patient, r.Dosage, r.Note,
+                GuardText(r.BatchName), GuardText(r.BatchId), GuardText(r.Patient), GuardText(r.Dosage), GuardText(r.Note),
             };
             sb.Append(string.Join(",", cols.Select(Escape))).Append("\r\n");
         }
@@ -102,6 +124,7 @@ public static class CsvService
         var cNote = Col("备注");
 
         string Get(List<string> r, int c) => c >= 0 && c < r.Count ? r[c] : "";
+        string GetText(List<string> r, int c) => UnguardText(Get(r, c));
 
         var records = new List<RecordItem>();
         var skipped = 0;
@@ -110,23 +133,23 @@ public static class CsvService
         {
             if (!Money.TryParseYuan(Get(r, cPrice), out var cents) || !Money.TryParseQuantity(Get(r, cQty), out var qty))
             { skipped++; continue; }
-            var batchName = Get(r, cBatchName).Trim();
-            var batchId = Get(r, cBatchId).Trim();
+            var batchName = GetText(r, cBatchName).Trim();
+            var batchId = GetText(r, cBatchId).Trim();
             if (batchId == "" && batchName != "") batchId = "batch-" + Hash("batch|" + batchName)[..16];
             var draft = new RecordItem
             {
                 Id = "",
-                Barcode = Get(r, cBarcode),
-                Name = Get(r, cName),
+                Barcode = GetText(r, cBarcode),
+                Name = GetText(r, cName),
                 PriceCents = cents,
                 Quantity = qty,
-                Category = Get(r, cCat),
-                Note = Get(r, cNote),
+                Category = GetText(r, cCat),
+                Note = GetText(r, cNote),
                 BatchId = batchId,
                 BatchName = batchName,
-                Patient = Get(r, cPatient),
-                Dosage = Get(r, cDosage),
-                Date = Get(r, cDate).Trim(),
+                Patient = GetText(r, cPatient),
+                Dosage = GetText(r, cDosage),
+                Date = GetText(r, cDate).Trim(),
             };
             var clean = RecordValidator.Sanitize(draft);
             if (clean == null) { skipped++; continue; }
