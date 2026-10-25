@@ -1,0 +1,11 @@
+{
+  "name": 100,
+  "note": 1000,
+  "barcode": 64,
+  "batch": 60,
+  "patient": 40,
+  "dosage": 60,
+  "quantityMax": 1000000,
+  "quantityDecimals": 6,
+  "priceCentsMax": 100000000000
+}
