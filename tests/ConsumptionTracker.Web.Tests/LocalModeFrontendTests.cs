@@ -41,7 +41,7 @@ public class LocalModeFrontendTests : IDisposable
     public async Task IndexLoadsStorageScriptsBeforeApp_NoInlineScriptOrStyle()
     {
         var html = await Get("/");
-        var order = new[] { "/money.js", "/life-local.js", "/life-remote.js", "/life-mode.js", "/app.js" }
+        var order = new[] { "/money.js", "/life-i18n.js", "/life-local.js", "/life-remote.js", "/life-mode.js", "/app.js" }
             .Select(s => html.IndexOf($"src=\"{s}\"", StringComparison.Ordinal)).ToArray();
         Assert.All(order, i => Assert.True(i > 0));
         Assert.Equal(order.OrderBy(i => i), order);
@@ -54,11 +54,23 @@ public class LocalModeFrontendTests : IDisposable
     [Theory]
     [InlineData("/life-local.js")]
     [InlineData("/life-mode.js")]
+    [InlineData("/life-i18n.js")]
     public async Task LocalAndModeModules_ContainNoNetworkCalls(string path)
     {
         var js = await Get(path);
         foreach (var banned in new[] { "fetch(", "XMLHttpRequest", "sendBeacon", "WebSocket", "EventSource", "/api/" })
             Assert.DoesNotContain(banned, js);
+    }
+
+    [Fact]
+    public async Task LanguageToggle_ExistsInHeader_DefaultChinese_AndI18nHasNoDomAccess()
+    {
+        var html = await Get("/");
+        Assert.Matches("<button id=\"langBtn\"[^>]*>English</button>", html);
+        var i18n = await Get("/life-i18n.js");
+        foreach (var banned in new[] { "document.", "innerHTML", "eval(", "new Function" })
+            Assert.DoesNotContain(banned, i18n);
+        Assert.Contains("getStored() === 'en' ? 'en' : 'zh'", i18n);   // 默认中文
     }
 
     [Fact]

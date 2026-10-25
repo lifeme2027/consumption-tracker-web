@@ -77,3 +77,11 @@ test('覆盖导入 422：错误带逐条原因（rejected/total/rejectedCount/me
   assert.deepStrictEqual(r.skippedRows, ok.skippedRows);
   assert.strictEqual(r.skipped, 1);
 });
+
+test('服务端 400/413 的 errorEn 变成 messageEn；网络错误自带英文', async () => {
+  const mk = (status, body) => ({ ok: false, status, headers: { get: () => 'application/json' }, json: async () => body });
+  const s = new RemoteStore({ fetch: async () => mk(400, { error: '文件不是有效的 JSON', errorEn: 'The file is not valid JSON' }) });
+  await assert.rejects(() => s.importText('x', 'merge'), (e) => e.message === '文件不是有效的 JSON' && e.messageEn === 'The file is not valid JSON');
+  const n = new RemoteStore({ fetch: async () => { throw new TypeError('x'); } });
+  await assert.rejects(() => n.meta(), (e) => e.message === '网络错误，请稍后重试' && e.messageEn === 'Network error, please try again later');
+});

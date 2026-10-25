@@ -11,12 +11,13 @@
   }
   var P = RemoteStore.prototype;
 
+  function netError() { var e = new Error('网络错误，请稍后重试'); e.messageEn = 'Network error, please try again later'; return e; }
   P._send = function (method, url, body, raw) {
     var self = this, headers = { 'X-Requested-With': 'life-web' }, payload;
     if (raw !== undefined) { payload = raw; headers['Content-Type'] = 'text/plain; charset=utf-8'; }
     else if (body !== undefined) { payload = JSON.stringify(body); headers['Content-Type'] = 'application/json'; }
     return Promise.resolve().then(function () { return self.fetch(url, { method: method, headers: headers, body: payload, credentials: 'same-origin', cache: 'no-store' }); })
-      .catch(function () { throw new Error('网络错误，请稍后重试'); })
+      .catch(function () { throw netError(); })
       .then(function (res) {
         var ct = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
         var read = ct.indexOf('json') >= 0 ? res.json().catch(function () { return null; }) : Promise.resolve(null);
@@ -39,7 +40,7 @@
   P._text = function (url) {
     var self = this;
     return Promise.resolve().then(function () { return self.fetch(url, { method: 'GET', headers: { 'X-Requested-With': 'life-web' }, credentials: 'same-origin', cache: 'no-store' }); })
-      .catch(function () { throw new Error('网络错误，请稍后重试'); })
+      .catch(function () { throw netError(); })
       .then(function (res) {
         if (res.status === 401) self.onUnauthorized();
         if (!res.ok) throw new Error('请求失败（' + res.status + '）');
