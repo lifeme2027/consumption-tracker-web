@@ -32,11 +32,12 @@ public static class KaspaMessageSigner
         if (string.IsNullOrWhiteSpace(signature))
             return null;
         string s = signature.Trim();
-        if (s.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-            s = s[2..];
-        if (s.Length == 128)
+        // 仅当「0x + 128 位十六进制」时才剥前缀。base64 签名约有 1/2000 的概率以 "0x"/"0X" 开头，
+        // 不能无条件剥掉（否则这类签名会被误判为格式无效，登录偶发 401）。
+        var hex = s.Length == 130 && s.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? s[2..] : s;
+        if (hex.Length == 128)
         {
-            try { return Convert.FromHexString(s); } catch (FormatException) { }
+            try { return Convert.FromHexString(hex); } catch (FormatException) { }
         }
         try
         {
