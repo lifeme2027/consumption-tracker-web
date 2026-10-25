@@ -64,7 +64,7 @@ public static class Endpoints
         auth.MapGet("/me", (HttpContext ctx, AuthService svc) =>
         {
             var addr = svc.Authenticate(ctx.Request.Cookies[opt.Cookie.Name]);
-            return addr == null ? Results.Json(new { error = "未登录" }, statusCode: 401) : Results.Ok(new { address = addr });
+            return addr == null ? Results.Json(new { error = "未登录", errorEn = "Not signed in" }, statusCode: 401) : Results.Ok(new { address = addr });
         }).RequireRateLimiting("api");
 
         auth.MapPost("/logout", (HttpContext ctx, AuthService svc) =>
@@ -82,7 +82,7 @@ public static class Endpoints
                 var ctx = fc.HttpContext;
                 var token = ctx.Request.Cookies[opt.Cookie.Name];
                 var addr = ctx.RequestServices.GetRequiredService<AuthService>().Authenticate(token);
-                if (addr == null) return Results.Json(new { error = "未登录或会话已过期" }, statusCode: 401);
+                if (addr == null) return Results.Json(new { error = "未登录或会话已过期", errorEn = "Not signed in or the session has expired" }, statusCode: 401);
                 ctx.Items[AddressKey] = addr;
                 ctx.Items[TokenKey] = token;
                 return await next(fc);
@@ -111,8 +111,8 @@ public static class Endpoints
         // 记录：查询用 POST + JSON 体，避免关键词出现在 URL / IIS 访问日志里
         secured.MapPost("/records/query", (QueryRequest body, HttpContext ctx, UserStore store) =>
         {
-            var q = ToQuery(body, out var err);
-            if (err != null) return Bad(err);
+            var q = ToQuery(body, out var err, out var errEn);
+            if (err != null) return Bad(err, errEn);
             var qo = opt.Query;
             var limit = body?.Limit ?? qo.DefaultPageSize;
             var offset = body?.Offset ?? 0;
@@ -143,22 +143,22 @@ public static class Endpoints
 
         secured.MapPost("/records", (RecordInput body, HttpContext ctx, UserStore store) =>
         {
-            var item = ToItem(body, out var err);
-            if (err != null) return Bad(err);
+            var item = ToItem(body, out var err, out var errEn);
+            if (err != null) return Bad(err, errEn);
             try { return Results.Created("/api/records/" + item!.Id, RecordDto.From(Repo(ctx, store).Add(item))); }
-            catch (Exception e) when (e is ArgumentException or InvalidOperationException) { return Bad(e.Message); }
+            catch (Exception e) when (e is ArgumentException or InvalidOperationException) { return Bad(e); }
         });
 
         secured.MapPut("/records/{id}", (string id, RecordInput body, HttpContext ctx, UserStore store) =>
         {
-            var item = ToItem(body, out var err);
-            if (err != null) return Bad(err);
+            var item = ToItem(body, out var err, out var errEn);
+            if (err != null) return Bad(err, errEn);
             try
             {
                 var r = Repo(ctx, store).Update(item! with { Id = id });
                 return r == null ? NotFound() : Results.Ok(RecordDto.From(r));
             }
-            catch (ArgumentException e) { return Bad(e.Message); }
+            catch (ArgumentException e) { return Bad(e); }
         });
 
         secured.MapDelete("/records/{id}", (string id, HttpContext ctx, UserStore store) =>
@@ -166,27 +166,26 @@ public static class Endpoints
 
         secured.MapPost("/records/delete", (IdsRequest body, HttpContext ctx, UserStore store) =>
         {
-            if (body?.Ids is not { Count: > 0 and <= 1000 } ids) return Bad("请提供 1~1000 个记录 ID");
+            if (body?.Ids is not { Count: > 0 and <= 1000 } ids) return Bad("请提供 1~1000 个记录 ID", "Please provide 1 to 1000 record IDs");
             return Results.Ok(new { deleted = Repo(ctx, store).Delete(ids) });
         });
 
         // 撤销删除：写回原记录（含原 id/createdAt/批次）；只作用于当前地址，逐条走与新增相同的校验
         secured.MapPost("/records/restore", (RestoreRequest body, HttpContext ctx, UserStore store) =>
         {
-            if (body?.Records is not { Count: > 0 and <= 1000 } list) return Bad("请提供 1~1000 条要恢复的记录");
+            if (body?.Records is not { Count: > 0 and <= 1000 } list) return Bad("请提供 1~1000 条要恢复的记录", "Please provide 1 to 1000 records to restore");
             var items = new List<RecordItem>();
             foreach (var d in list)
             {
-                if (d == null || string.IsNullOrWhiteSpace(d.Id)) return Bad("要恢复的记录缺少 ID");
+                if (d == null || string.IsNullOrWhiteSpace(d.Id)) return Bad("要恢复的记录缺少 ID", "A record to restore is missing its ID");
                 var item = RecordValidator.Sanitize(new RecordItem
                 {
                     Id = d.Id, Barcode = d.Barcode ?? "", Name = d.Name ?? "", PriceCents = d.PriceCents, Quantity = d.Quantity,
                     Category = d.Category ?? "", Note = d.Note ?? "", BatchId = d.BatchId ?? "", BatchName = d.BatchName ?? "",
                     Patient = d.Patient ?? "", Dosage = d.Dosage ?? "", Date = d.Date ?? "", CreatedAt = d.CreatedAt,
                 });
-                if (item == null) return Bad("要恢复的记录无效");
-                var limit = RecordLimits.Check(item);
-                if (limit != null) return Bad(limit);
+                if (item == null) return Bad("要恢复的记录无效", "A record to restore is invalid");
+                if (RecordLimits.Problem(item) is { } lp) return Bad(lp.Zh, lp.En);
                 items.Add(item);
             }
             try
@@ -194,14 +193,14 @@ public static class Endpoints
                 var s = Repo(ctx, store).Import(items, Array.Empty<Product>(), ImportMode.Merge);
                 return Results.Ok(new { restored = s.Added + s.Updated });
             }
-            catch (InvalidOperationException e) { return Bad(e.Message); }
+            catch (InvalidOperationException e) { return Bad(e); }
         });
 
         secured.MapPost("/records/batch", (BatchAssignRequest body, HttpContext ctx, UserStore store) =>
         {
-            if (body?.Ids is not { Count: > 0 and <= 1000 } ids) return Bad("请提供 1~1000 个记录 ID");
+            if (body?.Ids is not { Count: > 0 and <= 1000 } ids) return Bad("请提供 1~1000 个记录 ID", "Please provide 1 to 1000 record IDs");
             var name = (body.Name ?? "").Trim();
-            if (name.Length > RecordLimits.MaxBatchName) return Bad("批次名过长");
+            if (name.Length > RecordLimits.MaxBatchName) return Bad("批次名过长", $"Batch name too long (max {RecordLimits.MaxBatchName} characters)");
             return Results.Ok(new { updated = Repo(ctx, store).AssignBatch(ids, name) });
         });
 
@@ -209,9 +208,9 @@ public static class Endpoints
         secured.MapGet("/stats", (string? month, string? day, HttpContext ctx, UserStore store) =>
         {
             month ??= DateUtil.Today()[..7];
-            if (month.Length != 7 || !DateUtil.IsValid(month + "-01")) return Bad("月份格式应为 YYYY-MM");
+            if (month.Length != 7 || !DateUtil.IsValid(month + "-01")) return Bad("月份格式应为 YYYY-MM", "Month must be YYYY-MM");
             day ??= DateUtil.Today();
-            if (!DateUtil.IsValid(day)) return Bad("日期格式应为 YYYY-MM-DD");
+            if (!DateUtil.IsValid(day)) return Bad("日期格式应为 YYYY-MM-DD", "Date must be YYYY-MM-DD");
             var (from, to) = DateUtil.MonthRange(month);
             var repo = Repo(ctx, store);
             var rows = repo.Query(new RecordQuery { From = from, To = to });
@@ -269,6 +268,8 @@ public static class Endpoints
             // 覆盖模式：全量预检——只要有一条不合格就整体中止，返回逐条原因，绝不清空现有数据
             if (importMode == ImportMode.Replace && parsed.Issues.Count > 0)
                 return Rejected(parsed.Issues, totalRows);
+            // 覆盖模式：0 条记录的文件（合法但为空）会清空现有数据——拒绝，要清空请用「一键删除全部数据」
+            if (importMode == ImportMode.Replace && parsed.Records.Count == 0) return EmptyReplace();
             try
             {
                 var s = Repo(ctx, store).Import(parsed.Records, parsed.Products, importMode);
@@ -276,12 +277,13 @@ public static class Endpoints
                 return Results.Ok(new { added = s.Added, updated = s.Updated, skipped, skippedRows = IssueRows(parsed.Issues), total = totalRows });
             }
             catch (ImportRejectedException e) { return Rejected(e.Issues, e.Total); }
-            catch (InvalidOperationException e) { return Bad(e.Message); }
+            catch (EmptyReplaceException) { return EmptyReplace(); }
+            catch (InvalidOperationException e) { return Bad(e); }
         });
 
         secured.MapPost("/account/delete-data", (ConfirmRequest body, HttpContext ctx, UserStore store) =>
         {
-            if (body?.Confirm != "DELETE") return Bad("需要二次确认：confirm 必须为 DELETE");
+            if (body?.Confirm != "DELETE") return Bad("需要二次确认：confirm 必须为 DELETE", "Confirmation required: confirm must be DELETE");
             return Results.Ok(new { deleted = Repo(ctx, store).DeleteAll() });
         });
     }
@@ -290,6 +292,9 @@ public static class Endpoints
 
     private static string Addr(HttpContext ctx) => (string)ctx.Items[AddressKey]!;
     private static UserRepository Repo(HttpContext ctx, UserStore store) => store.ForUser(Addr(ctx));
+    /// <summary>异常转 400：英文取自 QuotaExceededException.MessageEn 或 Data["en"]。</summary>
+    private static IResult Bad(Exception e) =>
+        Bad(e.Message, (e as QuotaExceededException)?.MessageEn ?? ImportFormat.English(e));
     private static IResult Bad(string? msg, string? en = null) =>
         Results.Json(new { error = msg ?? "请求无效", errorEn = en ?? (msg is null ? "Invalid request" : null) }, statusCode: 400);
     private const int MaxIssueRows = 200;   // 响应里最多列出的行数；总数另有 rejectedCount / skipped
@@ -305,7 +310,15 @@ public static class Endpoints
             rejected = IssueRows(issues), rejectedCount = issues.Count, total,
         }, statusCode: 422);
 
-    private static IResult NotFound() => Results.Json(new { error = "记录不存在" }, statusCode: 404);
+    private static IResult EmptyReplace() =>
+        Results.Json(new
+        {
+            error = EmptyReplaceException.Reason.Zh + "。如需清空全部数据，请使用「一键删除全部数据」",
+            errorEn = EmptyReplaceException.Reason.En + ". To clear all data, use the \"一键删除全部数据\" (delete all data) button",
+            rejected = Array.Empty<object>(), rejectedCount = 0, total = 0,
+        }, statusCode: 422);
+
+    private static IResult NotFound() => Results.Json(new { error = "记录不存在", errorEn = "Record not found" }, statusCode: 404);
 
     private static IResult File(HttpContext ctx, byte[] bytes, string contentType, string fileName)
     {
@@ -313,11 +326,11 @@ public static class Endpoints
         return Results.Bytes(bytes, contentType);
     }
 
-    private static RecordItem? ToItem(RecordInput? b, out string? error)
+    private static RecordItem? ToItem(RecordInput? b, out string? error, out string? errorEn)
     {
-        error = null;
-        if (b == null) { error = "请求体为空"; return null; }
-        if (b.PriceCents is null or < 0) { error = "价格不能为空或为负"; return null; }
+        error = null; errorEn = null;
+        if (b == null) { error = "请求体为空"; errorEn = "The request body is empty"; return null; }
+        if (b.PriceCents is null or < 0) { error = "价格不能为空或为负"; errorEn = "Price must be present and not negative"; return null; }
         var item = new RecordItem
         {
             Barcode = (b.Barcode ?? "").Trim(),
@@ -331,19 +344,19 @@ public static class Endpoints
             Patient = (b.Patient ?? "").Trim(),
             Dosage = (b.Dosage ?? "").Trim(),
         };
-        var errs = RecordValidator.Validate(item);
-        if (errs.Count > 0) { error = string.Join("；", errs); return null; }
-        error = RecordLimits.Check(item);
-        return error == null ? item : null;
+        var errs = RecordValidator.Problems(item);
+        if (errs.Count > 0) { var j = RecordValidator.Join(errs); error = j.Zh; errorEn = j.En; return null; }
+        if (RecordLimits.Problem(item) is { } lim) { error = lim.Zh; errorEn = lim.En; return null; }
+        return item;
     }
 
-    private static RecordQuery ToQuery(QueryRequest? b, out string? error)
+    private static RecordQuery ToQuery(QueryRequest? b, out string? error, out string? errorEn)
     {
-        error = null;
+        error = null; errorEn = null;
         if (b == null) return new RecordQuery();
-        if (!string.IsNullOrEmpty(b.From) && !DateUtil.IsValid(b.From)) error = "起始日期格式无效";
-        if (!string.IsNullOrEmpty(b.To) && !DateUtil.IsValid(b.To)) error = "结束日期格式无效";
-        if ((b.Keyword?.Length ?? 0) > 100) error = "关键词过长";
+        if (!string.IsNullOrEmpty(b.From) && !DateUtil.IsValid(b.From)) { error = "起始日期格式无效"; errorEn = "The start date format is invalid"; }
+        if (!string.IsNullOrEmpty(b.To) && !DateUtil.IsValid(b.To)) { error = "结束日期格式无效"; errorEn = "The end date format is invalid"; }
+        if ((b.Keyword?.Length ?? 0) > 100) { error = "关键词过长"; errorEn = "The keyword is too long"; }
         return new RecordQuery { From = b.From, To = b.To, Category = b.Category, BatchId = b.BatchId, Keyword = b.Keyword };
     }
 

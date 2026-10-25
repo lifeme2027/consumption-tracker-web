@@ -133,9 +133,9 @@ public class RepositoryTests : IDisposable
         using var f = new RepoFixture(maxRecords: 2);
         var repo = f.User(_a);
         repo.Add(R("1")); repo.Add(R("2"));
-        Assert.Throws<InvalidOperationException>(() => repo.Add(R("3")));
+        Assert.ThrowsAny<InvalidOperationException>(() => repo.Add(R("3")));
         var imp = new[] { R("x") with { Id = "new-1" } };
-        Assert.Throws<InvalidOperationException>(() => repo.Import(imp, Array.Empty<Product>(), ImportMode.Merge));
+        Assert.ThrowsAny<InvalidOperationException>(() => repo.Import(imp, Array.Empty<Product>(), ImportMode.Merge));
         Assert.Equal(2, repo.Count()); // 导入事务整体回滚
     }
 

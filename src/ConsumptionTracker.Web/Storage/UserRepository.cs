@@ -72,7 +72,7 @@ public sealed class UserRepository : IRecordRepository
     {
         using var x = Open();
         using var tx = x.Conn.BeginTransaction();
-        if (Count(x, tx) >= _maxRecords) throw new InvalidOperationException($"记录数已达上限（{_maxRecords} 条）");
+        if (Count(x, tx) >= _maxRecords) throw new QuotaExceededException($"记录数已达上限（{_maxRecords} 条）", $"The record limit has been reached ({_maxRecords} records)");
         var batch = ResolveBatch(x, tx, record.BatchName);
         var clean = Clean(record with { Id = Guid.NewGuid().ToString(), BatchId = batch.id, BatchName = batch.name });
         Upsert(x, tx, clean);
@@ -177,7 +177,7 @@ public sealed class UserRepository : IRecordRepository
     {
         var n = (name ?? "").Trim();
         if (n == "") return ("", "");
-        if (n.Length > RecordLimits.MaxBatchName) throw new ArgumentException("批次名过长");
+        if (n.Length > RecordLimits.MaxBatchName) throw ArgEn("批次名过长", $"Batch name too long (max {RecordLimits.MaxBatchName} characters)");
         var existing = x.Scalar<string>("SELECT batch_id FROM records WHERE address = $a AND batch_name = $n AND batch_id <> '' LIMIT 1", tx, ("$n", n));
         return (existing ?? Guid.NewGuid().ToString(), n);
     }
@@ -226,6 +226,7 @@ public sealed class UserRepository : IRecordRepository
         // 覆盖导入：先对全部记录做完整预检；有任何一条不合格就整体中止，不清空任何现有数据
         if (mode == ImportMode.Replace)
         {
+            if (recordList.Count == 0) throw new EmptyReplaceException();   // 空文件覆盖 = 清空现有数据：拒绝
             var issues = ImportRejectedException.Precheck(recordList);
             if (issues.Count > 0) throw new ImportRejectedException(issues, recordList.Count);
         }
@@ -244,7 +245,7 @@ public sealed class UserRepository : IRecordRepository
             var r = RecordValidator.Sanitize(raw);
             if (r == null || RecordLimits.Check(r) != null) { skipped++; continue; }   // 仅合并模式可达：覆盖模式已预检
             var exists = x.Scalar<long>("SELECT COUNT(*) FROM records WHERE address = $a AND id = $id", tx, ("$id", r.Id)) > 0;
-            if (!exists && ++count > _maxRecords) throw new InvalidOperationException($"导入后记录数将超过上限（{_maxRecords} 条），已取消");
+            if (!exists && ++count > _maxRecords) throw new QuotaExceededException($"导入后记录数将超过上限（{_maxRecords} 条），已取消", $"The record count would exceed the limit of {_maxRecords} after import; cancelled");
             Upsert(x, tx, r);
             accepted.Add(r);
             if (exists) updated++; else added++;
@@ -290,11 +291,18 @@ public sealed class UserRepository : IRecordRepository
 
     private static RecordItem Clean(RecordItem r)
     {
-        var clean = RecordValidator.Sanitize(r)
-                    ?? throw new ArgumentException(string.Join("；", RecordValidator.Validate(r)));
-        var limit = RecordLimits.Check(clean);
-        if (limit != null) throw new ArgumentException(limit);
+        var clean = RecordValidator.Sanitize(r);
+        if (clean == null) { var j = RecordValidator.Join(RecordValidator.Problems(r)); throw ArgEn(j.Zh, j.En); }
+        if (RecordLimits.Problem(clean) is { } limit) throw ArgEn(limit.Zh, limit.En);
         return clean;
+    }
+
+    /// <summary>带英文消息（Data["en"]）的 ArgumentException，接口层据此返回 errorEn。</summary>
+    private static ArgumentException ArgEn(string zh, string en)
+    {
+        var e = new ArgumentException(zh);
+        e.Data["en"] = en;
+        return e;
     }
 
     private static int Count(Ctx x, SqliteTransaction? tx) =>
