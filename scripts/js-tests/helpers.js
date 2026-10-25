@@ -1,0 +1,12 @@
+const path = require('path');
+const fs = require('fs');
+const { IDBFactory } = require('fake-indexeddb');
+const WW = path.join(__dirname, '..', '..', 'src', 'ConsumptionTracker.Web', 'wwwroot');
+const L = require(path.join(WW, 'life-local.js'));
+exports.WW = WW;
+exports.L = L;
+exports.vectors = (f) => JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'shared-vectors', f), 'utf8'));
+exports.openStore = () => L.LocalStore.open({ indexedDB: new IDBFactory(), name: 'life-test' });
+exports.rec = (o = {}) => ({ name: '牛奶', priceCents: 500, quantity: 1, date: '2026-10-05', ...o });
+exports.backup = (records, products = []) => JSON.stringify({ app: 'consumption-tracker', version: 2, records, products });
+exports.full = (o = {}) => ({ id: 'a1', barcode: '', name: '牛奶', priceCents: 500, quantity: 1, category: '食品', note: '', batchId: '', batchName: '', patient: '', dosage: '', date: '2026-10-05', createdAt: 1000, ...o });
