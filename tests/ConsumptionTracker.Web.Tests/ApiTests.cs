@@ -28,7 +28,7 @@ public class ApiTests : IDisposable
             (HttpMethod.Get, "/api/meta"), (HttpMethod.Get, "/api/stats"), (HttpMethod.Get, "/api/export.json"),
             (HttpMethod.Get, "/api/export.csv"), (HttpMethod.Get, "/api/records/x"), (HttpMethod.Post, "/api/records"),
             (HttpMethod.Post, "/api/records/query"), (HttpMethod.Put, "/api/records/x"), (HttpMethod.Delete, "/api/records/x"),
-            (HttpMethod.Post, "/api/records/delete"), (HttpMethod.Post, "/api/records/batch"), (HttpMethod.Post, "/api/import"),
+            (HttpMethod.Post, "/api/records/delete"), (HttpMethod.Post, "/api/records/batch"), (HttpMethod.Post, "/api/records/restore"), (HttpMethod.Post, "/api/import"),
             (HttpMethod.Post, "/api/products/lookup"), (HttpMethod.Post, "/api/account/delete-data"),
         })
         {

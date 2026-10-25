@@ -157,6 +157,33 @@ public static class Endpoints
             return Results.Ok(new { deleted = Repo(ctx, store).Delete(ids) });
         });
 
+        // 撤销删除：写回原记录（含原 id/createdAt/批次）；只作用于当前地址，逐条走与新增相同的校验
+        secured.MapPost("/records/restore", (RestoreRequest body, HttpContext ctx, UserStore store) =>
+        {
+            if (body?.Records is not { Count: > 0 and <= 1000 } list) return Bad("请提供 1~1000 条要恢复的记录");
+            var items = new List<RecordItem>();
+            foreach (var d in list)
+            {
+                if (d == null || string.IsNullOrWhiteSpace(d.Id)) return Bad("要恢复的记录缺少 ID");
+                var item = RecordValidator.Sanitize(new RecordItem
+                {
+                    Id = d.Id, Barcode = d.Barcode ?? "", Name = d.Name ?? "", PriceCents = d.PriceCents, Quantity = d.Quantity,
+                    Category = d.Category ?? "", Note = d.Note ?? "", BatchId = d.BatchId ?? "", BatchName = d.BatchName ?? "",
+                    Patient = d.Patient ?? "", Dosage = d.Dosage ?? "", Date = d.Date ?? "", CreatedAt = d.CreatedAt,
+                });
+                if (item == null) return Bad("要恢复的记录无效");
+                var limit = RecordLimits.Check(item);
+                if (limit != null) return Bad(limit);
+                items.Add(item);
+            }
+            try
+            {
+                var s = Repo(ctx, store).Import(items, Array.Empty<Product>(), ImportMode.Merge);
+                return Results.Ok(new { restored = s.Added + s.Updated });
+            }
+            catch (InvalidOperationException e) { return Bad(e.Message); }
+        });
+
         secured.MapPost("/records/batch", (BatchAssignRequest body, HttpContext ctx, UserStore store) =>
         {
             if (body?.Ids is not { Count: > 0 and <= 1000 } ids) return Bad("请提供 1~1000 个记录 ID");

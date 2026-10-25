@@ -21,6 +21,8 @@ public sealed record RecordDto(
 }
 
 public sealed record QueryRequest(string? From, string? To, string? Category, string? BatchId, string? Keyword);
+/// <summary>撤销删除：把刚删除的记录按原样（含原 id/createdAt/批次）写回。</summary>
+public sealed record RestoreRequest(List<RecordDto>? Records);
 public sealed record IdsRequest(List<string>? Ids);
 public sealed record BatchAssignRequest(List<string>? Ids, string? Name);
 public sealed record BarcodeRequest(string? Barcode);
