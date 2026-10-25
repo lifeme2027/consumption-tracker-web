@@ -3,7 +3,13 @@
  * 所有数据一律用 textContent / value 写入 DOM，不使用 innerHTML。 */
 (function () {
   const $ = (id) => document.getElementById(id);
-  const state = { cfg: null, address: null, meta: { categories: [], batches: [] }, editingId: null, records: [], challenge: null };
+  const LL = window.LifeLocal, LM = window.LifeMode, LR = window.LifeRemote;
+  // mc：模式控制器（默认本地；登录 Kaspa 后才是云端）。数据读写一律经 store()，界面不关心当前是哪种存储。
+  const state = { cfg: null, meta: { categories: [], batches: [] }, editingId: null, records: [], challenge: null, mc: null };
+  const store = () => state.mc.store;
+  const NOTICE_KEY = 'life.noticeDismissed';
+  function lsGet(k) { try { return window.localStorage.getItem(k); } catch { return null; } }
+  function lsSet(k, v) { try { window.localStorage.setItem(k, v); } catch { /* 隐私模式下忽略 */ } }
 
   // ---------- 小工具 ----------
   function el(tag, props, ...kids) {
@@ -28,6 +34,7 @@
   // 金额/数量解析在 money.js（与桌面/手机同一规则，shared-vectors 校验）
   const { yuanToCents, parseQty, amountCents } = window.LifeMoney;
 
+  // 只用于登录相关接口与配置；记录数据一律走 store()（本地 IndexedDB 或云端 life-remote.js）
   async function api(method, url, body, raw) {
     const headers = { 'X-Requested-With': 'life-web' };
     let payload;
@@ -39,7 +46,6 @@
     let data = null;
     const ct = res.headers.get('content-type') || '';
     if (ct.includes('json')) { try { data = await res.json(); } catch { data = null; } }
-    if (res.status === 401 && state.address) { showLogin('登录已过期，请重新登录'); }
     if (!res.ok) { const e = new Error((data && data.error) || `请求失败（${res.status}）`); e.status = res.status; throw e; }
     return data;
   }
@@ -69,20 +75,49 @@
   }
 
   // ---------- 视图切换 ----------
-  function showLogin(msg) {
-    state.address = null; state.challenge = null;
-    $('who').classList.add('hidden'); $('appView').classList.add('hidden'); $('loginView').classList.remove('hidden');
+  async function showLogin(msg) {
+    state.challenge = null;
+    $('appView').classList.add('hidden'); $('loginView').classList.remove('hidden');
     $('manualBox').classList.add('hidden'); $('sigInput').value = '';
     say('loginMsg', msg || '', msg ? 'err' : '');
     closeDialog();
+    if (!state.cfg) {   // 配置只在用户主动点登录时才请求
+      try { state.cfg = await api('GET', '/api/config'); } catch { state.cfg = { devLogin: false }; }
+      $('devBox').classList.toggle('hidden', !state.cfg.devLogin);
+    }
+    $('kaswareHint').textContent = window.kasware ? '已检测到 KasWare。' : '未检测到 KasWare 扩展（可用下方手动签名）。';
   }
-  async function showApp(address) {
-    state.address = address;
-    $('whoAddr').textContent = address; $('whoAddr').title = address;
-    $('who').classList.remove('hidden'); $('loginView').classList.add('hidden'); $('appView').classList.remove('hidden');
-    await loadMeta();
-    resetForm();
-    switchTab('register');
+  function hideLogin() { $('loginView').classList.add('hidden'); $('appView').classList.remove('hidden'); }
+
+  // ---------- 模式（本地 / 云端） ----------
+  function showToast(text, onUndo, ms) {
+    clearToast();
+    $('toastText').textContent = text; $('toastUndo').classList.toggle('hidden', !onUndo);
+    state.undo = onUndo || null; $('toast').classList.remove('hidden');
+    state.toastTimer = setTimeout(clearToast, ms || (onUndo ? 6000 : 5000));
+  }
+  function clearToast() {
+    clearTimeout(state.toastTimer); state.undo = null; $('toast').classList.add('hidden');
+  }
+  async function applyMode(ev) {
+    const cloud = ev.mode === 'cloud';
+    $('modeBadge').textContent = cloud ? '云端模式' : '本地模式';
+    $('modeBadge').className = 'badge ' + (cloud ? 'cloud' : 'local');
+    $('whoAddr').textContent = ev.address || ''; $('whoAddr').title = ev.address || '';
+    $('whoAddr').classList.toggle('hidden', !cloud);
+    $('loginBtn').classList.toggle('hidden', cloud); $('logoutBtn').classList.toggle('hidden', !cloud);
+    $('modeInfoLocal').classList.toggle('hidden', cloud); $('modeInfoCloud').classList.toggle('hidden', !cloud);
+    $('cloudSync').classList.toggle('hidden', !cloud); $('loginTip').classList.toggle('hidden', cloud);
+    $('localNotice').classList.toggle('hidden', cloud || lsGet(NOTICE_KEY) === '1');
+    $('wipeHint').textContent = cloud
+      ? '将删除此账户在服务器上的全部记录、商品记忆与批次，删除后无法在本页恢复。建议先导出备份。'
+      : '将删除本浏览器里的全部记录、商品记忆与批次，删除后无法在本页恢复。建议先导出备份。';
+    clearToast(); hideLogin(); closeDialog();
+    say('impMsg', ''); say('syncMsg', ''); say('wipeMsg', ''); say('expMsg', '');
+    for (const id of ['impDetail', 'syncDetail']) $(id).classList.add('hidden');
+    try { await loadMeta(); } catch (e) { say('formMsg', e.message, 'err'); }
+    resetForm(); switchTab('register');
+    if (ev.reason === 'expired') showToast('云端登录已过期，已回到本地模式（本地数据不受影响）', null, 8000);
   }
 
   // ---------- 登录 ----------
@@ -96,7 +131,7 @@
     if (!ch || ch.address !== address) throw new Error('请先获取待签名消息');
     state.challenge = null; // 挑战只能用一次
     const r = await api('POST', '/api/auth/verify', { address, nonce: ch.nonce, signature });
-    await showApp(r.address);
+    state.mc.loginSucceeded(r.address);
   }
   async function kaswareLogin() {
     const kw = window.kasware;
@@ -132,12 +167,11 @@
   }
   async function devLogin() {
     const address = $('loginAddr').value.trim().toLowerCase();
-    try { const r = await api('POST', '/api/auth/dev-login', { address }); await showApp(r.address); }
+    try { const r = await api('POST', '/api/auth/dev-login', { address }); state.mc.loginSucceeded(r.address); }
     catch (e) { say('loginMsg', e.message, 'err'); }
   }
   async function logout() {
-    try { await api('POST', '/api/auth/logout'); } catch { /* ignore */ }
-    showLogin('已退出登录');
+    await state.mc.logout(() => api('POST', '/api/auth/logout'));
   }
 
   // ---------- 元数据 ----------
@@ -148,7 +182,7 @@
     if ([...sel.options].some((o) => o.value === keep)) sel.value = keep;
   }
   async function loadMeta() {
-    const m = await api('GET', '/api/meta');
+    const m = await store().meta();
     state.meta = m;
     const cats = m.categories.map((c) => ({ value: c, label: c }));
     fillSelect($('fCategory'), cats);
@@ -179,7 +213,7 @@
     const code = $('fBarcode').value.trim();
     if (!code) { $('fName').focus(); return; }
     try {
-      const p = await api('POST', '/api/products/lookup', { barcode: code });
+      const p = await store().lookup(code);
       if (p.found) {
         $('fName').value = p.name;
         if (p.category) $('fCategory').value = p.category;
@@ -212,11 +246,20 @@
     if (f.error) { say('formMsg', f.error, 'err'); return; }
     $('saveBtn').disabled = true;
     try {
+      const st = store();
+      if (f.body.barcode) {   // 同编码同日重复登记提醒：可继续保存
+        const dups = await st.duplicates(f.body.barcode, f.body.date, state.editingId);
+        if (dups.length) {
+          const more = dups.length > 1 ? `等 ${dups.length} 条` : '';
+          const ok = await confirmBox('重复登记提醒', `${f.body.date} 已登记过相同编码（${f.body.barcode}）的记录「${dups[0].name}」${more}。仍要保存吗？`, '仍然保存');
+          if (!ok) { say('formMsg', '已取消保存', ''); return; }
+        }
+      }
       if (state.editingId) {
-        await api('PUT', '/api/records/' + encodeURIComponent(state.editingId), f.body);
+        await st.update(state.editingId, f.body);
         resetForm(); switchTab('history');
       } else {
-        await api('POST', '/api/records', f.body);
+        await st.add(f.body);
         const keepDate = f.body.date, keepBatch = f.body.batchName, keepPatient = f.body.patient;
         resetForm();
         $('fDate').value = keepDate; $('fBatch').value = keepBatch; $('fPatient').value = keepPatient; // 连续录入沿用
@@ -282,7 +325,7 @@
   }
   async function loadList() {
     try {
-      const r = await api('POST', '/api/records/query', readQuery());
+      const r = await store().query(readQuery());
       state.records = r.records;
       $('listSummary').textContent = `共 ${r.count} 条，合计 ${fmtYuan(r.totalCents)}`;
       renderList();
@@ -312,21 +355,31 @@
     }
   }
   const selectedIds = () => [...$('list').querySelectorAll('input[type=checkbox]:checked')].map((c) => c.getAttribute('data-id'));
+  // 删除后约 6 秒内可撤销：撤销 = 把原记录（含原 id、createdAt、批次）整条写回
+  async function removeWithUndo(recs) {
+    const st = store(), ids = recs.map((r) => r.id);
+    try {
+      await st.remove(ids);
+      await loadList(); await loadMeta();
+      showToast(`已删除 ${ids.length} 条记录`, async () => {
+        try { await st.restore(recs); await loadMeta(); if (!$('tab-history').classList.contains('hidden')) await loadList(); $('listSummary').textContent = `已撤销删除，恢复 ${recs.length} 条`; }
+        catch (e) { $('listSummary').textContent = '撤销失败：' + e.message; }
+      });
+    } catch (e) { $('listSummary').textContent = e.message; }
+  }
   async function deleteOne(r) {
-    if (!(await confirmBox('删除记录', `确定删除「${r.name}」（${r.date}，${fmtYuan(r.amountCents)}）吗？`, '删除', true))) return;
-    try { await api('DELETE', '/api/records/' + encodeURIComponent(r.id)); await loadList(); await loadMeta(); }
-    catch (e) { $('listSummary').textContent = e.message; }
+    if (!(await confirmBox('删除记录', `确定删除「${r.name}」（${r.date}，${fmtYuan(r.amountCents)}）吗？（删除后 6 秒内可撤销）`, '删除', true))) return;
+    await removeWithUndo([r]);
   }
   async function bulkDelete() {
     const ids = selectedIds(); if (!ids.length) { $('listSummary').textContent = '请先勾选记录'; return; }
-    if (!(await confirmBox('删除所选', `确定删除所选 ${ids.length} 条记录吗？`, '删除', true))) return;
-    try { await api('POST', '/api/records/delete', { ids }); await loadList(); await loadMeta(); }
-    catch (e) { $('listSummary').textContent = e.message; }
+    if (!(await confirmBox('删除所选', `确定删除所选 ${ids.length} 条记录吗？（删除后 6 秒内可撤销）`, '删除', true))) return;
+    await removeWithUndo(state.records.filter((r) => ids.includes(r.id)));
   }
   async function bulkAssign() {
     const ids = selectedIds(); if (!ids.length) { $('listSummary').textContent = '请先勾选记录'; return; }
     const name = $('bulkBatch').value.trim(); if (!name) { $('listSummary').textContent = '请输入批次名称'; return; }
-    try { await api('POST', '/api/records/batch', { ids, name }); await loadMeta(); await loadList(); }
+    try { await store().assignBatch(ids, name); await loadMeta(); await loadList(); }
     catch (e) { $('listSummary').textContent = e.message; }
   }
 
@@ -339,7 +392,7 @@
   async function loadStats() {
     const month = $('sMonth').value || today().slice(0, 7), day = $('sDay').value || today();
     try {
-      const s = await api('GET', `/api/stats?month=${encodeURIComponent(month)}&day=${encodeURIComponent(day)}`);
+      const s = await store().stats(month, day);
       $('sDayTotal').textContent = fmtYuan(s.dayTotalCents); $('sDayCount').textContent = `${s.dayCount} 条`;
       $('sMonthTotal').textContent = fmtYuan(s.monthTotalCents); $('sMonthCount').textContent = `${s.monthCount} 条`;
       const cats = $('sCats'), days = $('sDays'); clear(cats); clear(days);
@@ -351,34 +404,120 @@
     } catch (e) { $('sDayCount').textContent = e.message; }
   }
 
-  // ---------- 数据：导入 / 一键删除 ----------
+  // ---------- 数据：导出 / 导入 / 同步 / 一键删除 ----------
+  const MAX_SHOW = 8;
+  function renderProblems(boxId, head, rows) {
+    const box = $(boxId); clear(box);
+    if (!rows || !rows.length) { box.classList.add('hidden'); return; }
+    box.append(el('div', { class: 'total', text: head }));
+    const ul = el('ul');
+    for (const x of rows.slice(0, MAX_SHOW)) ul.append(el('li', { text: `${x.label || '第 ' + x.row + ' 条'}：${x.reason}` }));
+    if (rows.length > MAX_SHOW) ul.append(el('li', { text: `……另有 ${rows.length - MAX_SHOW} 条未列出（共 ${rows.length} 条）` }));
+    box.append(ul); box.classList.remove('hidden');
+  }
+  function importSummary(prefix, r) {
+    return `${prefix}：新增 ${r.added}，更新 ${r.updated}，跳过 ${r.skipped}`;
+  }
+  function showImportFailure(msgId, boxId, e) {
+    const rows = e.rejected || null;
+    if (rows && rows.length) {
+      say(msgId, `导入已中止：${e.total != null ? `共 ${e.total} 条中有 ` : ''}${rows.length} 条不合格，现有数据没有任何改动。`, 'err');
+      renderProblems(boxId, `不合格的记录（共 ${rows.length} 条，下面最多列出前 ${MAX_SHOW} 条）`, rows);
+    } else { say(msgId, e.message, 'err'); $(boxId).classList.add('hidden'); }
+  }
+  function showImportResult(msgId, boxId, prefix, r) {
+    say(msgId, importSummary(prefix, r), 'ok');
+    renderProblems(boxId, `被跳过的记录（共 ${r.skipped} 条，下面最多列出前 ${MAX_SHOW} 条）`, r.skippedRows);
+  }
+  function download(name, text, mime) {
+    const url = URL.createObjectURL(new Blob([text], { type: mime }));
+    const a = el('a', { href: url, download: name }); document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+  async function exportAs(kind, name) {
+    try {
+      const st = store();
+      if (kind === 'csv') download(name || `consumption-${today()}.csv`, await st.exportCsv(), 'text/csv;charset=utf-8');
+      else download(name || `consumption-${today()}.json`, await st.exportJson(), 'application/json');
+      say('expMsg', '已导出，请妥善保管文件（含你的全部记录，未加密）。', 'ok');
+    } catch (e) { say('expMsg', e.message, 'err'); }
+  }
   async function doImport() {
     const f = $('impFile').files[0];
+    $('impDetail').classList.add('hidden');
     if (!f) { say('impMsg', '请选择 JSON 或 CSV 文件', 'err'); return; }
     if (f.size > 5 * 1024 * 1024) { say('impMsg', '文件超过 5MB', 'err'); return; }
     const mode = document.querySelector('input[name=impMode]:checked').value;
-    if (mode === 'replace' && !(await confirmBox('覆盖导入', '覆盖导入会先清空此地址名下现有的全部记录，再导入文件内容。确定继续吗？', '清空并导入', true))) return;
+    const where = state.mc.mode === 'cloud' ? '此账户在服务器上现有的' : '本浏览器里现有的';
+    if (mode === 'replace' && !(await confirmBox('覆盖导入', `覆盖导入会先清空${where}全部记录，再导入文件内容。会先检查整份文件，有任何一条不合格就整体中止、不动现有数据。确定继续吗？`, '清空并导入', true))) return;
     try {
       const text = await f.text();
-      const r = await api('POST', `/api/import?mode=${mode}${mode === 'replace' ? '&confirm=yes' : ''}`, undefined, text);
-      say('impMsg', `导入完成：新增 ${r.added}，更新 ${r.updated}，跳过 ${r.skipped}`, 'ok');
+      const r = await store().importText(text, mode);
+      showImportResult('impMsg', 'impDetail', '导入完成', r);
       $('impFile').value = ''; await loadMeta();
-    } catch (e) { say('impMsg', e.message, 'err'); }
+    } catch (e) { showImportFailure('impMsg', 'impDetail', e); }
+  }
+  /** 三选一对话框：返回被点按钮的 value；点取消/空白处返回 null。 */
+  function choose(title, paragraphs, buttons) {
+    return new Promise((resolve) => {
+      const body = el('div', {}, ...paragraphs.map((t) => el('p', { text: t })));
+      dialog(title, body, buttons.map((b) => ({ text: b.text, cls: b.cls, onClick: () => { resolve(b.value); closeDialog(); } })), () => resolve(null));
+    });
+  }
+  async function uploadLocal() {
+    const remote = state.mc.remote, local = state.mc.local;
+    $('syncDetail').classList.add('hidden');
+    if (!remote) return;
+    try {
+      const text = await local.exportJson();
+      const pre = LL.precheck(LL.parseImport(text));
+      if (pre.rejected.length) { showImportFailure('syncMsg', 'syncDetail', Object.assign(new Error('本地有不合格记录'), { rejected: pre.rejected, total: pre.records.length + pre.rejected.length })); return; }
+      if (!pre.records.length) { say('syncMsg', '本地没有记录可上传', 'err'); return; }
+      const mode = await choose('上传本地数据到账户', [
+        `把本浏览器里的 ${pre.records.length} 条记录上传到当前登录的账户（云端）。上传前已检查全部记录，均合格。`,
+        '合并上传（推荐）：云端已有的记录全部保留；id 相同的以本地为准，其余新增。',
+        '覆盖云端：先清空云端现有的全部记录，再写入本地记录——云端有而本地没有的记录会丢失。',
+      ], [{ text: '取消', value: null }, { text: '覆盖云端', cls: 'danger', value: 'replace' }, { text: '合并上传', cls: 'primary', value: 'merge' }]);
+      if (!mode) return;
+      if (mode === 'replace' && !(await confirmBox('确认覆盖云端', '云端现有的全部记录将被清空并替换为本地的记录，无法在本页撤销。建议先在云端模式导出备份。确定覆盖吗？', '覆盖云端', true))) return;
+      const r = await remote.importText(text, mode);
+      showImportResult('syncMsg', 'syncDetail', '上传完成', r);
+    } catch (e) { showImportFailure('syncMsg', 'syncDetail', e); }
+  }
+  async function downloadCloud() {
+    const remote = state.mc.remote, local = state.mc.local;
+    $('syncDetail').classList.add('hidden');
+    if (!remote) return;
+    try {
+      const mode = await choose('从账户下载到本地', [
+        '把云端账户里的记录下载到本浏览器的本地存储。',
+        '合并下载（推荐）：本地已有的记录全部保留；id 相同的以云端为准，其余新增。',
+        '覆盖本地：先清空本地现有的全部记录，再写入云端的记录——本地有而云端没有的记录会丢失。会先检查整份云端数据，有任何一条不合格就整体中止、本地保持不变。',
+      ], [{ text: '取消', value: null }, { text: '覆盖本地', cls: 'danger', value: 'replace' }, { text: '合并下载', cls: 'primary', value: 'merge' }]);
+      if (!mode) return;
+      if (mode === 'replace' && !(await confirmBox('确认覆盖本地', '本浏览器里现有的全部本地记录将被清空并替换为云端的记录。建议先退出云端后导出本地备份。确定覆盖吗？', '覆盖本地', true))) return;
+      const text = await remote.exportJson();
+      const r = await local.importText(text, mode);
+      showImportResult('syncMsg', 'syncDetail', '下载完成', r);
+    } catch (e) { showImportFailure('syncMsg', 'syncDetail', e); }
   }
   async function wipeAll() {
+    const cloud = state.mc.mode === 'cloud';
     // 第一次确认
-    if (!(await confirmBox('删除全部数据（1/2）', '这会永久删除此地址名下的全部记录、商品记忆和批次，且无法恢复。是否继续？（建议先导出备份）', '继续', true))) return;
+    if (!(await confirmBox('删除全部数据（1/2）', cloud
+      ? '这会删除此账户在服务器上的全部记录、商品记忆和批次，删除后无法在本页恢复。是否继续？（建议先导出备份）'
+      : '这会删除本浏览器里的全部记录、商品记忆和批次，删除后无法在本页恢复。是否继续？（建议先导出备份）', '继续', true))) return;
     // 第二次确认：必须手动输入
     const input = el('input', { type: 'text', autocomplete: 'off', placeholder: '输入 删除全部 以确认' });
     const ok = await new Promise((resolve) => {
       dialog('删除全部数据（2/2）', el('div', {}, el('p', { text: '最后一次确认：请输入“删除全部”四个字。' }), input), [
-        { text: '取消', onClick: () => { closeDialog(); resolve(false); } },
-        { text: '永久删除', cls: 'danger', onClick: () => { if (input.value.trim() === '删除全部') { closeDialog(); resolve(true); } else input.focus(); } },
-      ]);
+        { text: '取消', onClick: () => { resolve(false); closeDialog(); } },
+        { text: '永久删除', cls: 'danger', onClick: () => { if (input.value.trim() === '删除全部') { resolve(true); closeDialog(); } else input.focus(); } },
+      ], () => resolve(false));
       input.focus();
     });
     if (!ok) return;
-    try { const r = await api('POST', '/api/account/delete-data', { confirm: 'DELETE' }); say('wipeMsg', `已删除 ${r.deleted} 条记录`, 'ok'); await loadMeta(); }
+    try { const n = await store().wipe(); say('wipeMsg', `已删除 ${n} 条记录`, 'ok'); await loadMeta(); }
     catch (e) { say('wipeMsg', e.message, 'err'); }
   }
 
@@ -392,7 +531,17 @@
   }
 
   // ---------- 启动 ----------
+  function unavailableStore(reason) {
+    const msg = `此浏览器无法使用本地存储（${reason}）。请换用普通（非无痕）窗口，或登录 Kaspa 钱包使用云端保存。`;
+    const s = { kind: 'local' };
+    for (const m of ['meta', 'lookup', 'add', 'update', 'remove', 'restore', 'query', 'stats', 'duplicates', 'assignBatch', 'exportJson', 'exportCsv', 'importText', 'wipe']) s[m] = () => Promise.reject(new Error(msg));
+    return s;
+  }
   async function init() {
+    $('loginBtn').addEventListener('click', () => showLogin(''));
+    $('loginBackBtn').addEventListener('click', hideLogin);
+    $('noticeClose').addEventListener('click', () => { lsSet(NOTICE_KEY, '1'); $('localNotice').classList.add('hidden'); });
+    $('toastUndo').addEventListener('click', () => { const f = state.undo; clearToast(); if (f) f(); });
     $('kaswareBtn').addEventListener('click', kaswareLogin);
     $('challengeBtn').addEventListener('click', manualChallenge);
     $('verifyBtn').addEventListener('click', manualVerify);
@@ -412,18 +561,28 @@
     $('bulkDelete').addEventListener('click', bulkDelete);
     $('bulkAssign').addEventListener('click', bulkAssign);
     $('sMonth').addEventListener('change', loadStats); $('sDay').addEventListener('change', loadStats);
+    $('expJson').addEventListener('click', () => exportAs('json'));
+    $('expCsv').addEventListener('click', () => exportAs('csv'));
+    $('expAll').addEventListener('click', () => exportAs('json', `consumption-all-${today()}.json`));
     $('impBtn').addEventListener('click', doImport);
+    $('uploadBtn').addEventListener('click', uploadLocal);
+    $('downloadBtn').addEventListener('click', downloadCloud);
     $('wipeBtn').addEventListener('click', wipeAll);
     $('overlay').addEventListener('click', (e) => { if (e.target === $('overlay')) closeDialog(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDialog(); });
 
-    try { state.cfg = await api('GET', '/api/config'); } catch { state.cfg = { devLogin: false }; }
-    $('devBox').classList.toggle('hidden', !state.cfg.devLogin);
-    $('kaswareHint').textContent = window.kasware ? '已检测到 KasWare。' : '未检测到 KasWare 扩展（可用下方手动签名）。';
-    try { const me = await api('GET', '/api/auth/me'); await showApp(me.address); }
-    catch { showLogin(''); }
+    let local;
+    try { local = await LL.LocalStore.open(); } catch (e) { local = unavailableStore(e && e.message ? e.message : '未知原因'); }
+    let storage = null; try { storage = window.localStorage; } catch { /* ignore */ }
+    state.mc = new LM.ModeController({
+      local, storage,
+      makeRemote: () => new LR.RemoteStore({ onUnauthorized: () => state.mc.sessionExpired() }),
+      probe: () => api('GET', '/api/auth/me'),
+    });
+    state.mc.onChange((ev) => { applyMode(ev); });
+    await state.mc.init();   // 默认本地：不发任何请求；仅当上次是云端模式时才探测一次会话
   }
   // KasWare 扩展可能晚于页面脚本注入
-  window.addEventListener('load', () => { if (window.kasware) $('kaswareHint').textContent = '已检测到 KasWare。'; });
+  window.addEventListener('load', () => { if (window.kasware && $('kaswareHint')) $('kaswareHint').textContent = '已检测到 KasWare。'; });
   init();
 })();

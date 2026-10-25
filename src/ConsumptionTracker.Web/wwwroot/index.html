@@ -11,16 +11,24 @@
 <body>
 <header class="top">
   <h1>日常消费 / 用药记录</h1>
-  <div id="who" class="who hidden">
-    <span id="whoAddr" class="mono"></span>
-    <button id="logoutBtn" class="btn small" type="button">退出登录</button>
+  <div id="who" class="who">
+    <span id="modeBadge" class="badge local" role="status">本地模式</span>
+    <span id="whoAddr" class="mono hidden"></span>
+    <button id="loginBtn" class="btn small" type="button">登录 Kaspa 钱包（可选，云端保存）</button>
+    <button id="logoutBtn" class="btn small hidden" type="button">退出云端</button>
   </div>
 </header>
+<div id="localNotice" class="notice hidden" role="note">
+  <span>数据保存在本机浏览器，建议定期导出</span>
+  <button id="noticeClose" class="btn small" type="button">知道了</button>
+</div>
 
 <main>
   <!-- 登录 -->
   <section id="loginView" class="card hidden">
-    <h2>用 Kaspa 地址登录</h2>
+    <h2>登录 Kaspa 钱包（可选，云端保存）</h2>
+    <p class="hint">不登录也能使用全部功能，数据只存在本浏览器。登录后才进入「云端模式」，数据存到服务器（没有端到端加密、不承诺匿名）。<strong>登录后不会自动同步</strong>，本地数据和云端数据保持各自独立，需要时在「数据」页手动上传/下载。</p>
+    <div class="row"><button id="loginBackBtn" class="btn" type="button">返回，继续使用本地模式</button></div>
     <p class="hint">只需证明你拥有某个 Kaspa 地址（kaspa:q… 主网）。登录签名<strong>不会产生任何交易，不涉及转账或支付</strong>；本站<strong>绝不会</strong>索要私钥或助记词。</p>
     <p class="hint warn">仅输入地址<strong>不能</strong>登录：必须用该地址的密钥对服务器给出的一次性消息签名。</p>
 
@@ -54,13 +62,15 @@
   </section>
 
   <!-- 主界面 -->
-  <section id="appView" class="hidden">
+  <section id="appView">
     <nav class="tabs" id="tabs">
       <button type="button" data-tab="register" class="active">登记</button>
       <button type="button" data-tab="history">记录</button>
       <button type="button" data-tab="stats">统计</button>
       <button type="button" data-tab="data">数据</button>
     </nav>
+    <p id="modeInfoLocal" class="mode-info local" data-mode="local"><strong>本地模式：</strong>数据只在你的浏览器里（不发送到服务器），清除浏览器数据或换设备会丢失，请定期导出备份。</p>
+    <p id="modeInfoCloud" class="mode-info cloud hidden" data-mode="cloud"><strong>云端模式：</strong>数据存在服务器上，没有端到端加密、不承诺匿名。</p>
 
     <!-- 登记 -->
     <section id="tab-register" class="card">
@@ -147,10 +157,11 @@
       <h3>导出</h3>
       <p class="hint">导出的 JSON/CSV 与桌面版、手机版格式兼容（JSON app=consumption-tracker，version=2；CSV 为带 BOM 的 UTF-8）。</p>
       <div class="row">
-        <a class="btn" href="/api/export.json" download>导出 JSON</a>
-        <a class="btn" href="/api/export.csv" download>导出 CSV</a>
-        <a class="btn primary" href="/api/export.json" download="consumption-all.json">一键导出全部数据</a>
+        <button id="expJson" class="btn" type="button">导出 JSON</button>
+        <button id="expCsv" class="btn" type="button">导出 CSV</button>
+        <button id="expAll" class="btn primary" type="button">一键导出全部数据</button>
       </div>
+      <p id="expMsg" class="msg" role="status"></p>
       <hr>
       <h3>导入</h3>
       <div class="row">
@@ -162,18 +173,36 @@
       </div>
       <div class="row"><button id="impBtn" class="btn" type="button">导入</button></div>
       <p id="impMsg" class="msg" role="status"></p>
+      <div id="impDetail" class="problems hidden"></div>
+      <section id="cloudSync" class="hidden">
+        <hr>
+        <h3>本地与云端（手动同步）</h3>
+        <p class="hint">登录后<strong>不会自动同步</strong>。这里的两个按钮是唯一会在本地与云端之间搬运数据的操作，每次都会先让你确认。</p>
+        <div class="row">
+          <button id="uploadBtn" class="btn" type="button">上传本地数据到账户</button>
+          <button id="downloadBtn" class="btn" type="button">从账户下载到本地</button>
+        </div>
+        <p id="syncMsg" class="msg" role="status"></p>
+        <div id="syncDetail" class="problems hidden"></div>
+      </section>
+      <p id="loginTip" class="hint" data-mode="local">想把数据存到云端、在多台设备上使用？点页头「登录 Kaspa 钱包（可选，云端保存）」。不登录完全不影响使用。</p>
       <hr>
       <h3>一键删除全部数据</h3>
-      <p class="hint">将永久删除此地址名下的<strong>全部</strong>记录、商品记忆与批次，不可恢复。建议先导出备份。</p>
+      <p id="wipeHint" class="hint">将删除当前模式下的<strong>全部</strong>记录、商品记忆与批次，删除后无法在本页恢复。建议先导出备份。</p>
       <div class="row"><button id="wipeBtn" class="btn danger" type="button">一键删除全部数据…</button></div>
       <p id="wipeMsg" class="msg" role="status"></p>
     </section>
   </section>
 </main>
 
+<div id="toast" class="toast hidden" role="status" aria-live="polite">
+  <span id="toastText"></span>
+  <button id="toastUndo" class="btn small" type="button">撤销</button>
+</div>
+
 <footer class="foot">
   <a href="/privacy.html">隐私说明</a> ·
-  仅为记录工具，不涉及支付或转账 · 数据存放在服务器，不对外分享
+  仅为记录工具，不涉及支付或转账 · 默认只存本机浏览器；登录 Kaspa 后才会存到服务器
 </footer>
 
 <div id="overlay" class="overlay hidden" role="dialog" aria-modal="true">
@@ -186,6 +215,9 @@
 
 <script src="/vendor/html5-qrcode.min.js"></script>
 <script src="/money.js"></script>
+<script src="/life-local.js"></script>
+<script src="/life-remote.js"></script>
+<script src="/life-mode.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>
