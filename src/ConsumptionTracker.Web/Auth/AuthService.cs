@@ -21,8 +21,7 @@ public sealed class AuthService
     {
         if (!KaspaAddress.TryNormalize(address, _options.Kaspa.Network, out var addr, out var err))
             return new(false, null, err);
-        var c = _challenges.Issue(addr);
-        return c == null ? new(false, null, "请求过于频繁，请稍后再试", 429) : new(true, c, null);
+        return new(true, _challenges.Issue(addr), null);
     }
 
     public LoginResult Verify(string? address, string? nonce, string? signature)
