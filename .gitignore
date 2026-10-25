@@ -1,0 +1,15 @@
+bin/
+obj/
+publish/
+artifacts/
+.vs/
+.idea/
+*.user
+*.db
+*.db-wal
+*.db-shm
+TestResults/
+App_Data/
+*.zip
+appsettings.Production.json
+appsettings.Development.local.json
