@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Privacy notice - Daily spending / medication log</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top"><h1>Privacy notice</h1><a class="btn small" href="/privacy.html" hreflang="zh-CN" lang="zh-CN">中文</a> <a class="btn small" href="/">Back</a></header>
+<main>
+<section class="card">
+<h2>What this is</h2>
+<p>A <strong>plain record-keeping tool</strong> for everyday spending and medication (name, price, quantity, category, date, batch, person taking the medication, dose, notes). It involves <strong>no payments, transfers or transactions</strong> and never reads your wallet balance. The main app interface is currently in Chinese (import / upload / download messages can be switched to English); this notice is the authoritative English description.</p>
+
+<h2>Two modes: local by default, cloud only if you sign in</h2>
+<p>The top of the page always shows whether you are in <strong>Local mode</strong> or <strong>Cloud mode</strong>. <strong>Every feature works without signing in</strong>; signing in with a Kaspa wallet is optional. The two modes are independent: nothing is synced automatically.</p>
+
+<h2>Local mode (default, no sign-in)</h2>
+<ul>
+<li><strong>Your data stays in your browser</strong> (IndexedDB) and <strong>is never sent to the server</strong>. Entering, viewing, editing, deleting, statistics, import and export all run inside the browser; the page submits no records to this site.</li>
+<li>If you clear browser data, use a private window, or switch browser or device, the data is gone and we cannot recover it for you. <strong>Please export a backup regularly</strong> (Data tab).</li>
+<li>Anyone who can open this browser on this computer can see the data. Do not use it on a shared computer, or delete your data after use.</li>
+<li><strong>Medication names, the person taking the medication, doses and notes are health-related sensitive information.</strong> In Local mode they exist only in your browser: there is no account, no session, and this site holds no copy. JSON / CSV files you export are <strong>not encrypted</strong>; keep them safe.</li>
+<li><strong>Deleting locally</strong>: &ldquo;Delete all data&rdquo; on the Data tab removes the data from the browser&rsquo;s IndexedDB. The browser&rsquo;s storage engine and the disk underneath may keep fragments of deleted content for some time, which we cannot control. Export files you already downloaded and data in other browsers or on other devices are not deleted.</li>
+<li>Local mode has no account and no session, so session lifetime and server backups do not apply. Opening the page only requests the page files themselves (see &ldquo;Server access logs&rdquo; below).</li>
+</ul>
+
+<h2>Cloud mode (optional, after signing in with a Kaspa wallet)</h2>
+<ul>
+<li>After you sign in, your records are stored in this site&rsquo;s server database. They are <strong>not shared</strong>, not sold, and not used for advertising; there are no third-party analytics scripts.</li>
+<li>Data is isolated by Kaspa address: each address can read and write only its own data, and the server checks ownership on every read and write.</li>
+<li>Data is stored on the server <strong>without end-to-end encryption</strong>. The server can read the plaintext, and the server administrator can technically access the database file. Do not put information in notes or other fields that you do not want stored on a server.</li>
+<li>An address is not anonymity: your Kaspa address is a public on-chain identifier and this site stores it to tell accounts apart. We <strong>do not promise anonymity</strong>.</li>
+<li><strong>Nothing is synced automatically after sign-in.</strong> Local and cloud data are separate. Data moves between them only when you press &ldquo;Upload local data to account&rdquo; or &ldquo;Download from account to local&rdquo; on the Data tab (each asks for confirmation and explains merge vs. overwrite).</li>
+<li>&ldquo;Leave cloud&rdquo; revokes the session and returns to Local mode; local data is left as it was.</li>
+<li><strong>Medication names, the person taking the medication, doses and notes are health-related sensitive information.</strong> In Cloud mode they are stored in plaintext on the server (see above, no end-to-end encryption). If you are not comfortable with that, use Local mode or leave those fields empty.</li>
+</ul>
+
+<h2>Cloud mode: session lifetime</h2>
+<ul>
+<li>A session lasts a <strong>fixed 12 hours</strong> after sign-in. It is not extended by continued use; after it expires you sign in again by signing with your wallet.</li>
+<li>&ldquo;Leave cloud&rdquo; revokes the session immediately. The server stores only a hash of the session token, never the token itself.</li>
+<li>&ldquo;Delete all data&rdquo; does not end the current session (sessions and data are separate); press &ldquo;Leave cloud&rdquo; to end it.</li>
+</ul>
+
+<h2>Cloud mode: what deletion actually does</h2>
+<p>Single-record delete and &ldquo;Delete all data&rdquo; really delete, but we do not overstate the effect. Precisely:</p>
+<ul>
+<li><strong>secure_delete</strong>: the database runs with SQLite&rsquo;s secure_delete, so the content of deleted records is <strong>overwritten with zeros</strong> inside the database pages instead of merely being marked free.</li>
+<li><strong>checkpoint</strong>: right after &ldquo;Delete all data&rdquo; the server merges the write-ahead log (WAL) back into the main database and <strong>truncates</strong> it, so deleted content does not linger in the log file. The server also does the same every hour, so content from single deletes is cleared from the log within about an hour.</li>
+<li><strong>Periodic VACUUM</strong>: about every 24 hours the server runs VACUUM, which rewrites the whole database file and drops free pages so the file no longer holds old page contents.</li>
+<li><strong>What is not deleted</strong>: <strong>backup copies that already exist</strong> on the server (including plaintext copies of the database made before you deleted) are not modified when you delete; export files you already downloaded are not deleted; and low-level residue we cannot control (SSD wear levelling, system snapshots, etc.) may remain. So deletion is not an absolute guarantee, and we do not promise one.</li>
+</ul>
+
+<h2>Cloud mode: server backup retention</h2>
+<ul>
+<li>The administrator backs up the server database file regularly. Backups are <strong>plaintext</strong> (like the database itself, there is no end-to-end encryption).</li>
+<li>Plaintext backups are kept for <strong>at most 30 days</strong> and then removed by the administrator&rsquo;s cleanup task (see DEPLOY.md). Data you delete in the cloud can therefore still exist in older backups for up to 30 days, until those backups are cleaned up.</li>
+<li>Backups are used only for disaster recovery and are not shared with third parties.</li>
+</ul>
+
+<h2>Server access logs (IIS logs)</h2>
+<ul>
+<li>In either mode, opening this site makes the IIS web server in front of the application write ordinary access logs: <strong>time, your IP address, the requested URL path, status code and your browser&rsquo;s User-Agent</strong>.</li>
+<li>These logs <strong>do not contain your record content</strong> (names, notes, person, dose, etc.): that is sent in request bodies, and keyword search also uses the request body, never the URL. They can show that an IP address visited the site or called an endpoint at a given time.</li>
+<li>IIS logs are kept for <strong>at most 30 days</strong> and then removed by the administrator&rsquo;s cleanup task (see DEPLOY.md).</li>
+<li>In Local mode the page itself submits no records to this site, so the logs only show requests for the page files.</li>
+</ul>
+
+<h2>Sign-in and keys</h2>
+<ul>
+<li>To sign in you sign a one-time message from the server with your Kaspa wallet, to prove you own the address. The message contains a random nonce and a time, can be used once, and is valid for a few minutes.</li>
+<li>This signature <strong>creates no on-chain transaction and authorizes no transfer</strong>.</li>
+<li>This site <strong>never</strong> asks for your private key or seed phrase. If anyone asks for them in this site&rsquo;s name, do not provide them.</li>
+<li>After a successful sign-in the server issues an HttpOnly session cookie with a limited lifetime (see &ldquo;session lifetime&rdquo;); leaving the cloud revokes it immediately.</li>
+</ul>
+
+<h2>Application logs</h2>
+<p>The application&rsquo;s own log records warnings and above only, and never record content (names, notes, person, dose, batch). Keyword search uses the request body, so it never appears in a URL. See the IIS logs section above for web-server logs.</p>
+
+<h2>Your controls</h2>
+<ul>
+<li><strong>Export all data</strong>: download JSON / CSV on the Data tab (both modes; the files are unencrypted, keep them safe).</li>
+<li><strong>Delete all data</strong>: on the Data tab, deletes all records in the current mode (two confirmations; the page offers no undo). What deletion really means, and how long backups are kept, is described above under &ldquo;Deleting locally&rdquo; and &ldquo;Cloud mode: what deletion actually does&rdquo;.</li>
+</ul>
+
+<h2>Other</h2>
+<p>The page loads no external scripts, fonts or analytics, and the browser content security policy (CSP) only allows connections to this site (in Local mode the page does not submit records even to this site). The QR scanner is a local component served with the site; the camera image is processed only in your browser and is never uploaded.</p>
+</section>
+</main>
+</body>
+</html>

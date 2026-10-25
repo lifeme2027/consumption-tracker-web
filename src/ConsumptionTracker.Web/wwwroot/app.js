@@ -1,7 +1,15 @@
 'use strict';
+
 /* 日常消费 / 用药记录 —— 前端。无第三方依赖（扫码库为本地 /vendor 文件）。
  * 所有数据一律用 textContent / value 写入 DOM，不使用 innerHTML。 */
 (function () {
+  // 一键删除的文案：如实说明“删除”实际做了什么，不使用绝对化措辞；隐私说明（privacy.html / privacy-en.html）与此一致。
+  const WIPE_TEXT = {
+    cloud: '将删除此账户在服务器上的全部记录、商品记忆与批次，本页不提供撤销。服务器会立即把数据库里这些内容擦写为零（secure_delete），并合并、截断预写日志（checkpoint）；空闲页约每 24 小时整理一次（VACUUM）。' +
+      '但是：服务器上已经存在的备份副本不会被删除（明文备份最长保留 30 天，由管理员清理），你已下载的导出文件也不会被删除。建议先导出备份。',
+    local: '将删除本浏览器里的全部记录、商品记忆与批次，本页不提供撤销。数据会从浏览器的 IndexedDB 中删除，但浏览器底层存储可能在一段时间内仍有残留；' +
+      '你已下载的导出文件、其他设备或其他浏览器里的数据都不会被删除。建议先导出备份。',
+  };
   const $ = (id) => document.getElementById(id);
   const LL = window.LifeLocal, LM = window.LifeMode, LR = window.LifeRemote, I18N = window.LifeI18n;
   // mc：模式控制器（默认本地；登录 Kaspa 后才是云端）。数据读写一律经 store()，界面不关心当前是哪种存储。
@@ -109,9 +117,7 @@
     $('modeInfoLocal').classList.toggle('hidden', cloud); $('modeInfoCloud').classList.toggle('hidden', !cloud);
     $('cloudSync').classList.toggle('hidden', !cloud); $('loginTip').classList.toggle('hidden', cloud);
     $('localNotice').classList.toggle('hidden', cloud || lsGet(NOTICE_KEY) === '1');
-    $('wipeHint').textContent = cloud
-      ? '将删除此账户在服务器上的全部记录、商品记忆与批次，删除后无法在本页恢复。建议先导出备份。'
-      : '将删除本浏览器里的全部记录、商品记忆与批次，删除后无法在本页恢复。建议先导出备份。';
+    $('wipeHint').textContent = cloud ? WIPE_TEXT.cloud : WIPE_TEXT.local;
     clearToast(); hideLogin(); closeDialog();
     clearFeedback('impMsg', 'impDetail'); clearFeedback('syncMsg', 'syncDetail'); say('wipeMsg', ''); say('expMsg', '');
     try { await loadMeta(); } catch (e) { say('formMsg', e.message, 'err'); }
@@ -507,20 +513,18 @@
   async function wipeAll() {
     const cloud = state.mc.mode === 'cloud';
     // 第一次确认
-    if (!(await confirmBox('删除全部数据（1/2）', cloud
-      ? '这会删除此账户在服务器上的全部记录、商品记忆和批次，删除后无法在本页恢复。是否继续？（建议先导出备份）'
-      : '这会删除本浏览器里的全部记录、商品记忆和批次，删除后无法在本页恢复。是否继续？（建议先导出备份）', '继续', true))) return;
+    if (!(await confirmBox('删除全部数据（1/2）', (cloud ? WIPE_TEXT.cloud : WIPE_TEXT.local) + ' 是否继续？', '继续', true))) return;
     // 第二次确认：必须手动输入
     const input = el('input', { type: 'text', autocomplete: 'off', placeholder: '输入 删除全部 以确认' });
     const ok = await new Promise((resolve) => {
       dialog('删除全部数据（2/2）', el('div', {}, el('p', { text: '最后一次确认：请输入“删除全部”四个字。' }), input), [
         { text: '取消', onClick: () => { resolve(false); closeDialog(); } },
-        { text: '永久删除', cls: 'danger', onClick: () => { if (input.value.trim() === '删除全部') { resolve(true); closeDialog(); } else input.focus(); } },
+        { text: '确认删除', cls: 'danger', onClick: () => { if (input.value.trim() === '删除全部') { resolve(true); closeDialog(); } else input.focus(); } },
       ], () => resolve(false));
       input.focus();
     });
     if (!ok) return;
-    try { const n = await store().wipe(); say('wipeMsg', `已删除 ${n} 条记录`, 'ok'); await loadMeta(); }
+    try { const n = await store().wipe(); say('wipeMsg', `已删除 ${n} 条记录。` + (state.mc.mode === 'cloud' ? '服务器已擦零并截断日志；已存在的备份不会被删除（明文备份最长保留 30 天）。' : ''), 'ok'); await loadMeta(); }
     catch (e) { say('wipeMsg', e.message, 'err'); }
   }
 
