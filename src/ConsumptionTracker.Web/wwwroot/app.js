@@ -202,6 +202,7 @@
     const a = amountCents(yuanToCents($('fPrice').value), $('fQty').value);
     $('fAmount').textContent = a == null ? '—' : fmtYuan(a);
   }
+  let lastLookedCode = '';   // 最近一次已查询的条码（见 lookup）
   function resetForm() {
     state.editingId = null;
     $('recForm').reset();
@@ -209,25 +210,37 @@
     $('formTitle').textContent = '登记一条记录';
     $('saveBtn').textContent = '保存';
     $('cancelEditBtn').classList.add('hidden');
-    say('formMsg', ''); $('lookupHint').textContent = '';
+    say('formMsg', ''); $('lookupHint').textContent = ''; lastLookedCode = '';
     updateAmount();
     focusBarcode();
   }
   function focusBarcode() { setTimeout(() => { if (!$('tab-register').classList.contains('hidden')) $('fBarcode').focus(); }, 0); }
-  async function lookup() {
+  // 条码记忆（本地模式存 IndexedDB 的 products 表，不上传）：lookup 命中即用历史名称/分类/单价覆盖表单（均可再改）；
+  // 未命中不清空用户已填内容。lastLookedCode 防止「回车查一次 + 随后失焦 change 又查一次」造成闪烁、覆盖用户刚改的内容。
+  function setCategory(cat) {
+    const sel = $('fCategory');
+    if (![...sel.options].some((o) => o.value === cat)) sel.append(el('option', { value: cat, text: cat }));
+    sel.value = cat;
+  }
+  /** fromEnter=true：扫码枪/回车/相机回调，总是查并把焦点移到数量或名称；false：条码框 change（Tab/失焦），仅在条码值变化时查，不抢焦点。 */
+  async function lookup(fromEnter = true) {
     const code = $('fBarcode').value.trim();
-    if (!code) { $('fName').focus(); return; }
+    if (!code) { lastLookedCode = ''; if (fromEnter) $('fName').focus(); return; }
+    if (!fromEnter && code === lastLookedCode) return;
+    lastLookedCode = code;
     try {
       const p = await store().lookup(code);
+      if ($('fBarcode').value.trim() !== code) return;   // 查询期间条码又变了，丢弃过期结果
       if (p.found) {
         $('fName').value = p.name;
-        if (p.category) $('fCategory').value = p.category;
+        if (p.category) setCategory(p.category);
         if (p.lastPriceCents != null) $('fPrice').value = (p.lastPriceCents / 100).toFixed(2);
-        $('lookupHint').textContent = '已带出上次记录的名称、分类和价格，请核对。';
-        updateAmount(); $('fQty').focus(); $('fQty').select();
+        $('lookupHint').textContent = '已带出上次的名称、分类、价格，请核对。';
+        updateAmount();
+        if (fromEnter) { $('fQty').focus(); $('fQty').select(); }
       } else {
         $('lookupHint').textContent = '新条码，请填写名称和价格。';
-        $('fName').focus();
+        if (fromEnter) $('fName').focus();
       }
     } catch (e) { $('lookupHint').textContent = e.message; }
   }
@@ -278,7 +291,7 @@
   function startEdit(r) {
     state.editingId = r.id;
     switchTab('register');
-    $('fBarcode').value = r.barcode; $('fName').value = r.name; $('fPrice').value = (r.priceCents / 100).toFixed(2);
+    $('fBarcode').value = r.barcode; lastLookedCode = r.barcode; $('fName').value = r.name; $('fPrice').value = (r.priceCents / 100).toFixed(2);
     $('fQty').value = String(r.quantity); $('fCategory').value = r.category; $('fDate').value = r.date;
     $('fBatch').value = r.batchName; $('fPatient').value = r.patient; $('fDosage').value = r.dosage; $('fNote').value = r.note;
     $('formTitle').textContent = '编辑记录'; $('saveBtn').textContent = '保存修改';
@@ -298,7 +311,7 @@
     }
     function done(code) {
       if (finished) return; finished = true;
-      closeDialog(); $('fBarcode').value = code; lookup();
+      closeDialog(); $('fBarcode').value = code; lookup(true);
     }
     const body = el('div', {}, el('div', { id: readerId, class: 'reader' }), status, manual);
     dialog('扫描条码', body, [
@@ -561,7 +574,9 @@
     $('cancelEditBtn').addEventListener('click', resetForm);
     $('camBtn').addEventListener('click', openCamera);
     // USB 扫码枪：模拟键盘输入，以回车结尾 —— 条码框回车只做查询，不提交表单
-    $('fBarcode').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); lookup(); } });
+    $('fBarcode').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); lookup(true); } });
+    // 手动输入条码后 Tab / 点别处（失焦触发 change）也带出历史；与回车共用 lastLookedCode，同一条码不会重复查询
+    $('fBarcode').addEventListener('change', () => { lookup(false); });
     for (const id of ['fPrice', 'fQty']) $(id).addEventListener('input', updateAmount);
     $('filterForm').addEventListener('submit', (e) => { e.preventDefault(); loadList(); });
     $('qReset').addEventListener('click', () => { $('filterForm').reset(); loadList(); });
