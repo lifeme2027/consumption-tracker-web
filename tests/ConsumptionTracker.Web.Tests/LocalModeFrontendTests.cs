@@ -41,7 +41,7 @@ public class LocalModeFrontendTests : IDisposable
     public async Task IndexLoadsStorageScriptsBeforeApp_NoInlineScriptOrStyle()
     {
         var html = await Get("/");
-        var order = new[] { "/money.js", "/life-i18n.js", "/life-local.js", "/life-remote.js", "/life-mode.js", "/app.js" }
+        var order = new[] { "/money.js", "/life-i18n.js", "/life-catalog.js", "/life-local.js", "/life-remote.js", "/life-mode.js", "/app.js" }
             .Select(s => html.IndexOf($"src=\"{s}\"", StringComparison.Ordinal)).ToArray();
         Assert.All(order, i => Assert.True(i > 0));
         Assert.Equal(order.OrderBy(i => i), order);
@@ -60,6 +60,28 @@ public class LocalModeFrontendTests : IDisposable
         var js = await Get(path);
         foreach (var banned in new[] { "fetch(", "XMLHttpRequest", "sendBeacon", "WebSocket", "EventSource", "/api/" })
             Assert.DoesNotContain(banned, js);
+    }
+
+    /// <summary>商品库查询：唯一的非 life-remote 网络调用，只发条码、POST、不带 Cookie；app.js 自己不写 fetch；开关默认开且写在设置里。</summary>
+    [Fact]
+    public async Task CatalogLookup_IsPostOnly_BarcodeOnly_NoCookies_SwitchableInSettings()
+    {
+        var cat = await Get("/life-catalog.js");
+        Assert.Contains("'/api/catalog/lookup'", cat);
+        Assert.Contains("method: 'POST'", cat);
+        Assert.Contains("credentials: 'omit'", cat);
+        Assert.Contains("JSON.stringify({ barcode: code })", cat);
+        Assert.Contains("TIMEOUT_MS = 3000", cat);
+        Assert.DoesNotContain("encodeURIComponent", cat);      // 条码不进网址
+        Assert.DoesNotContain("sendBeacon", cat);
+        Assert.DoesNotContain("/api/records", cat);
+        var app = await Get("/app.js");
+        Assert.DoesNotContain("/api/catalog", app);            // 网络调用只在 life-catalog.js 里
+        Assert.Contains("CAT.query(code)", app);
+        var html = await Get("/");
+        Assert.Contains("id=\"catalogToggle\" type=\"checkbox\" checked", html);   // 默认开启
+        Assert.Contains("查询商品库（会把条码发送到本站服务器，不含其他数据、不记录）", html);
+        Assert.Contains("开启「查询商品库」", html);                                  // 本地模式提示条如实说明
     }
 
     [Fact]
@@ -105,6 +127,20 @@ public class LocalModeFrontendTests : IDisposable
         Assert.Contains("数据只在你的浏览器里", html);
         Assert.Contains("没有端到端加密", html);
         Assert.Contains("不承诺匿名", html);
+    }
+
+    /// <summary>隐私页如实说明商品库查询：开启时条码发到本站服务器、只发条码、不记录不保存、可关闭、关闭即离线；本地模式其他数据仍只在设备上。</summary>
+    [Fact]
+    public async Task PrivacyPages_DescribeCatalogLookupHonestly_InBothLanguages()
+    {
+        var zh = await Get("/privacy.html");
+        foreach (var k in new[] { "商品库查询", "条码会被发送到本站服务器", "只发送条码这一个字段", "不记录、不保存", "不在网址里", "关闭这个开关后", "完全不发送条码查询请求", "完全离线", "其他数据一直只在你的设备上", "不携带登录 Cookie", "默认开启" })
+            Assert.Contains(k, zh);
+        Assert.Contains("数据只在你的浏览器里", zh);              // 记录本身仍只在本地
+        var en = await Get("/privacy-en.html");
+        foreach (var k in new[] { "Product catalog lookup", "is sent to this site&rsquo;s server", "Only the barcode is sent", "neither logs nor stores", "not in the URL", "When the switch is off", "no barcode lookups at all", "fully offline", "all other data always stays on your device", "no sign-in cookie", "on by default" })
+            Assert.Contains(k, en);
+        Assert.Contains("never sent to the server", en);
     }
 
     /// <summary>本地条码记忆：app.js 的条码框要同时处理回车（扫码枪）与 change（手动输入后 Tab/失焦），文案三端一致；隐私页说明只存本地。</summary>

@@ -22,17 +22,19 @@ function chromePath() {
 }
 const freePort = () => new Promise((res) => { const s = net.createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); });
 
-let server, browser, base, dataDir, addr;
+let server, browser, base, dataDir, addr, catalogDb;
 const errors = [];
 
 test.before(async () => {
   assert.ok(fs.existsSync(DLL), '先执行 dotnet build -c Release：' + DLL);
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'life-e2e-'));
   addr = execFileSync('python3', [path.join(ROOT, 'scripts', 'gen_address.py')]).toString().trim();
+  catalogDb = path.join(dataDir, 'synthetic-catalog.db');           // 合成商品库（与任何真实商品无关），放在数据目录里随测试清理
+  execFileSync('python3', [path.join(__dirname, 'make_catalog.py'), catalogDb]);
   const port = await freePort(); base = 'http://127.0.0.1:' + port;
   server = spawn('dotnet', [DLL], {
     cwd: path.dirname(DLL),
-    env: { ...process.env, ASPNETCORE_ENVIRONMENT: 'Development', Life__Auth__DevLogin: 'true', Life__Storage__DataDir: dataDir, ASPNETCORE_URLS: base },
+    env: { ...process.env, ASPNETCORE_ENVIRONMENT: 'Development', Life__Auth__DevLogin: 'true', Life__Storage__DataDir: dataDir, Life__Catalog__Path: catalogDb, ASPNETCORE_URLS: base },
     stdio: 'ignore',
   });
   for (let i = 0; i < 100; i++) { try { if ((await fetch(base + '/healthz')).ok) break; } catch { /* 等待启动 */ } await sleep(200); }
@@ -283,11 +285,91 @@ test('条码记忆（本地模式）：保存后再扫同一条码，回车 / Ta
   await p.$eval('#fBarcode', (e) => { e.value = ''; }); await p.type('#fBarcode', 'unknown-' + Date.now()); await p.keyboard.press('Tab'); await sleep(300);
   assert.match(await text(p, '#lookupHint'), /新条码，请填写/);
   assert.strictEqual(await val(p, '#fName'), '手填的名称', '未命中不清空用户已输入内容');
-  assert.deepStrictEqual(p.apiCalls, [], '条码记忆在本地模式不发任何 /api 请求');
+  // 默认开启「查询商品库」：每次查条码只会多出对商品库接口的 POST（商品库里没有这些条码 → 静默回退到本机记忆）；绝不会有别的 /api 请求
+  assert.ok(p.apiCalls.length > 0 && p.apiCalls.every((c) => c === 'POST /api/catalog/lookup'), '条码记忆在本地模式只应有商品库查询：' + p.apiCalls.join(','));
   // 清理：删掉本用例的记录，避免影响其它用例的行数断言
   await openHistory(p);
   await p.$eval('#qKeyword', (e) => { e.value = '记忆咖啡'; }); await p.keyboard.press('Enter'); await sleep(300);
   await p.click('#selAll'); await p.click('#bulkDelete'); await sleep(200); await clickBtn(p, '删除'); await waitRows(p, 0, '条码记忆用例清理');
+  await p.close();
+});
+
+/** 商品库查询（本地模式，合成库）：命中带出名称/分类/参考售价；本地历史价优先；未命中回退本机记忆；开关关闭后不发任何请求。 */
+test('商品库查询（本地模式）：命中带出名称、分类、参考售价，可改可存；历史价优先；超长分类截断；开关关闭零请求且持久；未命中回退', async () => {
+  const hit = '9900000000017', noPrice = '9900000000024', longCat = '9900000000031';
+  const p = await newPage();
+  assert.match(await text(p, '#modeBadge'), /本地/);
+  assert.strictEqual(await p.$eval('#catalogToggle', (e) => e.checked), true, '开关默认开启');
+  // ① 命中：名称/分类/参考售价自动带出，提示说明来源
+  await typeBarcode(p, hit, 'Enter');
+  assert.strictEqual(await val(p, '#fName'), '合成测试饮料');
+  assert.strictEqual(await val(p, '#fCategory'), '合成饮料');
+  assert.strictEqual(await val(p, '#fPrice'), '3.50');
+  assert.match(await text(p, '#lookupHint'), /已从商品库带出名称、分类、价格（价格取自商品库参考售价）/);
+  assert.deepStrictEqual(p.apiCalls.filter((c) => c !== 'POST /api/catalog/lookup'), []);
+  assert.ok(p.apiCalls.includes('POST /api/catalog/lookup'));
+  // 可改并保存（改名称与单价）→ 成为本机记忆
+  await p.$eval('#fName', (e) => { e.value = ''; }); await p.type('#fName', '合成饮料(改)');
+  await p.$eval('#fPrice', (e) => { e.value = ''; }); await p.type('#fPrice', '5');
+  await p.$eval('#fDate', (e) => { e.value = '2026-10-25'; });
+  await p.click('#saveBtn');
+  for (let i = 0; i < 30 && !/已保存/.test(await text(p, '#formMsg')); i++) await sleep(100);
+  assert.match(await text(p, '#formMsg'), /已保存/);
+  // ② 再扫：名称、分类仍取商品库；价格取本机历史价 5.00（优先于参考售价 3.50）
+  await typeBarcode(p, hit, 'Enter');
+  assert.strictEqual(await val(p, '#fName'), '合成测试饮料');
+  assert.strictEqual(await val(p, '#fPrice'), '5.00');
+  assert.match(await text(p, '#lookupHint'), /已从商品库带出名称、分类（价格取自本地历史记忆）/);
+  // ③ 参考售价为空：不填价格，提示请填写
+  await typeBarcode(p, noPrice, 'Tab');
+  assert.strictEqual(await val(p, '#fName'), '合成无价商品');
+  assert.strictEqual(await val(p, '#fPrice'), '');
+  assert.match(await text(p, '#lookupHint'), /已从商品库带出名称、分类，请填写价格/);
+  // ④ 分类 45 字 → 截断为 30 字
+  await typeBarcode(p, longCat, 'Enter');
+  assert.strictEqual((await val(p, '#fCategory')).length, 30);
+  // ⑤ 未命中：不清空已填内容；回退「新条码」提示
+  await p.$eval('#fName', (e) => { e.value = ''; }); await p.type('#fName', '手填的名称');
+  await p.$eval('#fBarcode', (e) => { e.value = ''; }); await p.type('#fBarcode', 'zz-miss-' + Date.now()); await p.keyboard.press('Tab'); await sleep(400);
+  assert.match(await text(p, '#lookupHint'), /新条码，请填写/);
+  assert.strictEqual(await val(p, '#fName'), '手填的名称');
+  // ⑥ 关闭开关（持久化）：不再有任何请求；已有本机记忆仍可用
+  await p.click('[data-tab=data]'); await sleep(150);
+  await p.click('#catalogToggle');
+  await p.reload({ waitUntil: 'networkidle0' });
+  assert.strictEqual(await p.$eval('#catalogToggle', (e) => e.checked), false, '刷新后开关仍为关闭');
+  p.apiCalls.length = 0;
+  await p.click('[data-tab=register]'); await sleep(150);
+  await typeBarcode(p, noPrice, 'Enter');                       // 商品库里有、本机没有 → 关闭后不应带出
+  assert.strictEqual(await val(p, '#fName'), '');
+  assert.match(await text(p, '#lookupHint'), /新条码，请填写/);
+  await typeBarcode(p, hit, 'Tab');                             // 本机记忆（上面保存的改名记录）仍然带出
+  assert.strictEqual(await val(p, '#fName'), '合成饮料(改)');
+  assert.match(await text(p, '#lookupHint'), /已带出上次的名称、分类、价格/);
+  assert.deepStrictEqual(p.apiCalls, [], '开关关闭后不应有任何 /api 请求（含商品库查询）');
+  // ⑦ 重新打开开关
+  await p.click('[data-tab=data]'); await sleep(150); await p.click('#catalogToggle');
+  await p.click('[data-tab=register]'); await sleep(150);
+  await typeBarcode(p, noPrice, 'Enter');
+  assert.strictEqual(await val(p, '#fName'), '合成无价商品');
+  // 清理
+  await openHistory(p);
+  await p.$eval('#qKeyword', (e) => { e.value = '合成饮料'; }); await p.keyboard.press('Enter'); await sleep(300);
+  await p.click('#selAll'); await p.click('#bulkDelete'); await sleep(200); await clickBtn(p, '删除'); await waitRows(p, 0, '商品库用例清理');
+  await p.close();
+});
+
+test('商品库查询（云端模式）：同一套逻辑，命中带出；商品库请求不带会话 Cookie', async () => {
+  const p = await newPage();
+  await loginCloud(p);
+  assert.match(await text(p, '#modeBadge'), /云端/);
+  let cookieHeader = 'unset';
+  await p.setRequestInterception(true);
+  p.on('request', (r) => { if (r.url().endsWith('/api/catalog/lookup')) cookieHeader = r.headers()['cookie']; r.continue(); });
+  await typeBarcode(p, '9900000000017', 'Enter');
+  assert.strictEqual(await val(p, '#fName'), '合成测试饮料');
+  assert.match(await text(p, '#lookupHint'), /已从商品库带出名称、分类/);
+  assert.ok(cookieHeader === undefined || cookieHeader === '', '商品库请求不应带 Cookie：' + cookieHeader);
   await p.close();
 });
 
