@@ -175,16 +175,32 @@
     if (typeof v === 'string' && /^\s*[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?\s*$/.test(v)) return Number(v);
     return null;
   }
+  var MAX_BACKUP_VERSION = 2;
+  var FRACTIONAL_CENTS = '价格（priceCents）必须是整数分，不能有小数';
+  var VERSION_INVALID = '备份文件的版本号无效（version 必须是整数 1 或 2）';
+  var VERSION_NEWER = '备份文件的版本高于本应用支持的版本（最高 2），请先升级应用后再导入';
+  var EMPTY_REPLACE = '文件中没有任何记录，覆盖导入不能用来清空数据，已拒绝（现有数据没有任何改动）';
+  /** 备份版本号：必须是 JSON 数字且为 1..2 的整数（v1/v2 兼容）；缺失/非数字/小数/<1 拒绝，更高版本拒绝并提示升级（与 Core 一致）。 */
+  function checkVersion(v) {
+    if (typeof v === 'number' && Number.isFinite(v) && v === Math.floor(v) && v >= 1) {
+      if (v <= MAX_BACKUP_VERSION) return;
+      throw err(VERSION_NEWER, 'This backup was made by a newer version of the app (this app supports up to version 2); please upgrade the app and import again');
+    }
+    throw err(VERSION_INVALID, 'The backup file\'s version is invalid (version must be the integer 1 or 2)');
+  }
   function parseJsonImport(text) {
     var obj;
     try { obj = JSON.parse(text.replace(/^\uFEFF/, '')); } catch (e) { throw err('文件不是有效的 JSON', 'The file is not valid JSON'); }
     if (!obj || typeof obj !== 'object' || obj.app !== 'consumption-tracker' || !Array.isArray(obj.records)) throw err('不是本应用导出的备份文件', 'This is not a backup file exported by this app');
+    checkVersion(obj.version);
     var items = [], rejected = [];
     obj.records.forEach(function (o, i) {
       var label = '第 ' + (i + 1) + ' 条';
       if (!o || typeof o !== 'object') { rejected.push({ row: i + 1, label: label, reason: '记录内容无效' }); return; }
       var cents = null, pc = numberOf(o.priceCents);
-      if (pc !== null && pc >= 0) cents = Math.round(pc);
+      // 小数分不静默取整，也不退回 price：该行无效（与 Core 一致）
+      if (pc !== null && pc >= 0 && pc !== Math.floor(pc)) { rejected.push({ row: i + 1, label: label, reason: FRACTIONAL_CENTS }); return; }
+      if (pc !== null && pc >= 0) cents = pc;
       else { var py = o.price, ps = typeof py === 'number' ? String(py) : typeof py === 'string' ? py : null; cents = ps === null ? null : Money.yuanToCents(ps); if (cents === null && pc !== null && pc < 0) cents = -1; }
       if (cents === null) { rejected.push({ row: i + 1, label: label, reason: PRICE_HINT }); return; }
       var q = numberOf(o.quantity);
@@ -196,7 +212,7 @@
       if (!o || typeof o !== 'object') return;
       var barcode = str(o.barcode).trim(); if (!barcode) return;
       var last = null, lc = numberOf(o.lastPriceCents), ly = numberOf(o.lastPrice);
-      if (lc !== null && lc >= 0) last = Math.round(lc); else if (ly !== null && ly >= 0) last = Math.round(ly * 100);
+      if (lc !== null && lc >= 0) last = lc === Math.floor(lc) ? lc : null; else if (ly !== null && ly >= 0) last = Math.round(ly * 100);
       var u = numberOf(o.updatedAt);
       products.push({ barcode: barcode, name: str(o.name).trim(), category: str(o.category).trim(), lastPriceCents: last, updatedAt: u === null ? Date.now() : u });
     });
@@ -440,6 +456,11 @@
     try { parsed = parseImport(text); pre = precheck(parsed); } catch (e) { return Promise.reject(e); }
     var total = parsed.items.length + parsed.rejected.length;
     if (mode === 'replace' && pre.rejected.length) return Promise.reject(ImportRejected(pre.rejected, total));
+    // 合法但为空的文件覆盖 = 清空现有数据：拒绝，要清空请用「一键删除全部数据」
+    if (mode === 'replace' && !pre.records.length) {
+      var ee = err(EMPTY_REPLACE + '。如需清空全部数据，请使用「一键删除全部数据」', 'The file contains no records; a replace-import cannot be used to clear data, so it was rejected (your existing data was not changed). To clear all data, use the "一键删除全部数据" (delete all data) button');
+      ee.name = 'EmptyReplace'; return Promise.reject(ee);
+    }
     return Promise.all([this._all(), this._products()]).then(function (v) {
       var existing = v[0], curProds = v[1];
       var ids = {}; existing.forEach(function (r) { ids[r.id] = 1; });

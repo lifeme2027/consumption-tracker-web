@@ -215,3 +215,67 @@ test('LM-L1：事务出错/中止而 tx.error 为 null 时，txDone 仍给出带
   });
   await assert.rejects(() => store2.remove(['x']), (e) => e instanceof Error && typeof e.message === 'string' && e.message.length > 0);
 });
+
+// ---------- 批次：③ 空覆盖拒绝 / ① 版本号 / ② 小数分 ----------
+const withVersion = (v, records = [full({ id: 'v1' })]) => {
+  const o = { app: 'consumption-tracker', records, products: [] };
+  if (v !== undefined) o.version = v;
+  return JSON.stringify(o);
+};
+
+test('③ 本地：合法但 0 条记录的文件覆盖导入被拒绝（中英文原因），旧数据保持原样；合并导入空文件不报错', async () => {
+  const s = await openStore();
+  await s.add(rec({ name: '旧1' })); await s.add(rec({ name: '旧2' }));
+  const before = JSON.stringify((await s.query({})).records);
+  for (const text of [backup([]), JSON.stringify({ app: 'consumption-tracker', version: 1, records: [] }), '日期,商品名,单价,数量\n', '\uFEFF日期,商品名,单价,数量\r\n']) {
+    await assert.rejects(() => s.importText(text, 'replace'), (e) => {
+      assert.match(e.message, /没有任何记录.*不能用来清空.*一键删除全部数据/);
+      assert.match(e.messageEn, /no records.*cannot be used to clear data.*delete all data/);
+      return true;
+    });
+    assert.strictEqual(JSON.stringify((await s.query({})).records), before, '旧数据必须原样');
+  }
+  const m = await s.importText(backup([]), 'merge');                               // 合并空文件：无副作用
+  assert.strictEqual(m.added, 0);
+  assert.strictEqual((await s.query({})).count, 2);
+  assert.strictEqual(await s.wipe(), 2);                                                             // 要清空：走一键删除
+  assert.strictEqual((await s.query({})).count, 0);
+});
+
+test('① 本地：备份 version 缺失/非数字/小数/<1 一律拒绝；更高版本拒绝并提示升级；v1/v2 兼容', async () => {
+  const s = await openStore();
+  const old = await s.add(rec({ name: '旧' }));
+  for (const v of [undefined, 'abc', '2', null, true, 0, -1, 1.5, [], {}]) {
+    for (const mode of ['replace', 'merge']) {
+      await assert.rejects(() => s.importText(withVersion(v), mode), (e) => {
+        assert.match(e.message, /版本号无效/); assert.match(e.messageEn, /version is invalid/); return true;
+      }, `version=${JSON.stringify(v)} ${mode}`);
+    }
+  }
+  for (const v of [3, 99, 4]) {
+    await assert.rejects(() => s.importText(withVersion(v), 'replace'), (e) => {
+      assert.match(e.message, /升级/); assert.match(e.messageEn, /upgrade/); return true;
+    });
+  }
+  assert.strictEqual((await s.query({})).count, 1, '被拒绝的导入不改动数据');
+  assert.strictEqual((await s.importText(withVersion(1), 'merge')).added, 1);
+  assert.strictEqual((await s.importText(withVersion(2, [full({ id: 'v2' })]), 'merge')).added, 1);
+  assert.strictEqual((await s.importText(withVersion(2.0, [full({ id: 'v3' })]), 'replace')).added, 1);
+});
+
+test('② 本地：priceCents 为小数（12.5、"12.5"）不取整也不退回 price——该行无效；整数形式 1250.0 有效', async () => {
+  const s = await openStore();
+  await s.add(rec({ name: '旧' }));
+  const frac = full({ id: 'f1', priceCents: 12.5, price: 0.13 });
+  await assert.rejects(() => s.importText(backup([full({ id: 'ok' }), frac]), 'replace'), (e) => {
+    assert.ok(e.rejected && e.rejected.length === 1 && e.rejected[0].row === 2);
+    assert.match(e.rejected[0].reason, /priceCents.*整数分.*不能有小数/);
+    return true;
+  });
+  assert.strictEqual((await s.query({})).count, 1, '覆盖中止，旧数据不变');
+  const r = await s.importText(backup([full({ id: 'ok' }), frac, full({ id: 'f2', priceCents: '12.5' }), full({ id: 'ok2', priceCents: 1250.0 })]), 'merge');
+  assert.strictEqual(r.added, 2); assert.strictEqual(r.skipped, 2);
+  assert.ok(r.skippedRows.every((x) => /整数分/.test(x.reason)));
+  const got = (await s.query({})).records.find((x) => x.id === 'ok2');
+  assert.strictEqual(got.priceCents, 1250);
+});

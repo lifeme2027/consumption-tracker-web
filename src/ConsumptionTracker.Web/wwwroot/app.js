@@ -6,7 +6,7 @@
   // 一键删除的文案：如实说明“删除”实际做了什么，不使用绝对化措辞；隐私说明（privacy.html / privacy-en.html）与此一致。
   const WIPE_TEXT = {
     cloud: '将删除此账户在服务器上的全部记录、商品记忆与批次，本页不提供撤销。服务器会立即把数据库里这些内容擦写为零（secure_delete），并合并、截断预写日志（checkpoint）；空闲页约每 24 小时整理一次（VACUUM）。' +
-      '但是：服务器上已经存在的备份副本不会被删除（明文备份最长保留 30 天，由管理员清理），你已下载的导出文件也不会被删除。建议先导出备份。',
+      '但是：服务器上已经存在的备份副本和访问日志不会随之自动删除（由管理员手动清理，不承诺清理期限），你已下载的导出文件也不会被删除。建议先导出备份。',
     local: '将删除本浏览器里的全部记录、商品记忆与批次，本页不提供撤销。数据会从浏览器的 IndexedDB 中删除，但浏览器底层存储可能在一段时间内仍有残留；' +
       '你已下载的导出文件、其他设备或其他浏览器里的数据都不会被删除。建议先导出备份。',
   };
@@ -458,7 +458,7 @@
     if (f.size > 5 * 1024 * 1024) { showImportNote('impMsg', 'impDetail', '文件超过 5MB', 'The file is larger than 5 MB'); return; }
     const mode = document.querySelector('input[name=impMode]:checked').value;
     const where = state.mc.mode === 'cloud' ? '此账户在服务器上现有的' : '本浏览器里现有的';
-    if (mode === 'replace' && !(await confirmBox('覆盖导入', `覆盖导入会先清空${where}全部记录，再导入文件内容。会先检查整份文件，有任何一条不合格就整体中止、不动现有数据。确定继续吗？`, '清空并导入', true))) return;
+    if (mode === 'replace' && !(await confirmBox('覆盖导入', `覆盖导入会先清空${where}全部记录，再导入文件内容。会先检查整份文件，有任何一条不合格、或文件里没有任何记录，就整体中止、不动现有数据（要清空请用「一键删除全部数据」）。确定继续吗？`, '清空并导入', true))) return;
     try {
       const text = await f.text();
       const r = await store().importText(text, mode);
@@ -524,7 +524,7 @@
       input.focus();
     });
     if (!ok) return;
-    try { const n = await store().wipe(); say('wipeMsg', `已删除 ${n} 条记录。` + (state.mc.mode === 'cloud' ? '服务器已擦零并截断日志；已存在的备份不会被删除（明文备份最长保留 30 天）。' : ''), 'ok'); await loadMeta(); }
+    try { const n = await store().wipe(); say('wipeMsg', `已删除 ${n} 条记录。` + (state.mc.mode === 'cloud' ? '服务器已擦零并截断日志；已存在的备份不会自动删除（由管理员手动清理，不承诺期限）。' : ''), 'ok'); await loadMeta(); }
     catch (e) { say('wipeMsg', e.message, 'err'); }
   }
 

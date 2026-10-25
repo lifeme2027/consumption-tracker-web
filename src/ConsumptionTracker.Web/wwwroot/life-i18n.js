@@ -36,7 +36,11 @@
     "编码过长（最多 64 字）": "Barcode too long (max 64 characters)",
     "批次名过长（最多 60 字）": "Batch name too long (max 60 characters)",
     "用药人过长（最多 40 字）": "Patient too long (max 40 characters)",
-    "剂量/规格过长（最多 60 字）": "Dosage/spec too long (max 60 characters)"
+    "剂量/规格过长（最多 60 字）": "Dosage/spec too long (max 60 characters)",
+    "备份文件的版本号无效（version 必须是整数 1 或 2）": "The backup file's version is invalid (version must be the integer 1 or 2)",
+    "备份文件的版本高于本应用支持的版本（最高 2），请先升级应用后再导入": "This backup was made by a newer version of the app (this app supports up to version 2); please upgrade the app and import again",
+    "价格（priceCents）必须是整数分，不能有小数": "priceCents must be a whole number of cents (no decimals)",
+    "文件中没有任何记录，覆盖导入不能用来清空数据，已拒绝（现有数据没有任何改动）": "The file contains no records; a replace-import cannot be used to clear data, so it was rejected (your existing data was not changed)"
   };
 
   // 整条消息（本地模式抛出的、或客户端自己产生的错误）；带数字的用下面的正则规则
@@ -81,6 +85,7 @@
     if (zh == null) return '';
     var s = String(zh);
     if (Object.prototype.hasOwnProperty.call(MESSAGES, s)) return MESSAGES[s];
+    if (Object.prototype.hasOwnProperty.call(REASONS, s)) return REASONS[s];
     for (var i = 0; i < MESSAGE_RULES.length; i++) if (MESSAGE_RULES[i][0].test(s)) return s.replace(MESSAGE_RULES[i][0], MESSAGE_RULES[i][1]);
     return s;
   }
