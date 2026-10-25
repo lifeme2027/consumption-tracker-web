@@ -3,7 +3,7 @@
  * 所有数据一律用 textContent / value 写入 DOM，不使用 innerHTML。 */
 (function () {
   const $ = (id) => document.getElementById(id);
-  const LL = window.LifeLocal, LM = window.LifeMode, LR = window.LifeRemote;
+  const LL = window.LifeLocal, LM = window.LifeMode, LR = window.LifeRemote, I18N = window.LifeI18n;
   // mc：模式控制器（默认本地；登录 Kaspa 后才是云端）。数据读写一律经 store()，界面不关心当前是哪种存储。
   const state = { cfg: null, meta: { categories: [], batches: [] }, editingId: null, records: [], challenge: null, mc: null };
   const store = () => state.mc.store;
@@ -113,8 +113,7 @@
       ? '将删除此账户在服务器上的全部记录、商品记忆与批次，删除后无法在本页恢复。建议先导出备份。'
       : '将删除本浏览器里的全部记录、商品记忆与批次，删除后无法在本页恢复。建议先导出备份。';
     clearToast(); hideLogin(); closeDialog();
-    say('impMsg', ''); say('syncMsg', ''); say('wipeMsg', ''); say('expMsg', '');
-    for (const id of ['impDetail', 'syncDetail']) $(id).classList.add('hidden');
+    clearFeedback('impMsg', 'impDetail'); clearFeedback('syncMsg', 'syncDetail'); say('wipeMsg', ''); say('expMsg', '');
     try { await loadMeta(); } catch (e) { say('formMsg', e.message, 'err'); }
     resetForm(); switchTab('register');
     if (ev.reason === 'expired') showToast('云端登录已过期，已回到本地模式（本地数据不受影响）', null, 8000);
@@ -405,32 +404,33 @@
   }
 
   // ---------- 数据：导出 / 导入 / 同步 / 一键删除 ----------
-  const MAX_SHOW = 8;
-  function renderProblems(boxId, head, rows, count) {
+  // 导入/上传/下载的反馈：每个反馈区记住「怎么画」，切换语言时按新语言重画（文案与翻译在 life-i18n.js，可单元测试）
+  const feedback = {};
+  function renderList(boxId, list) {
     const box = $(boxId); clear(box);
-    if (!rows || !rows.length) { box.classList.add('hidden'); return; }
-    box.append(el('div', { class: 'total', text: head }));
+    if (!list) { box.classList.add('hidden'); return; }
+    box.append(el('div', { class: 'total', text: list.head }));
     const ul = el('ul');
-    for (const x of rows.slice(0, MAX_SHOW)) ul.append(el('li', { text: `${x.label || '第 ' + x.row + ' 条'}：${x.reason}` }));
-    const all = count != null ? count : rows.length;   // 服务端只回传前若干行，总数另给
-    if (all > MAX_SHOW) ul.append(el('li', { text: `……另有 ${all - MAX_SHOW} 条未列出（共 ${all} 条）` }));
+    for (const t of list.items) ul.append(el('li', { text: t }));
+    if (list.more) ul.append(el('li', { text: list.more }));
     box.append(ul); box.classList.remove('hidden');
   }
-  function importSummary(prefix, r) {
-    return `${prefix}：新增 ${r.added}，更新 ${r.updated}，跳过 ${r.skipped}`;
+  function setFeedback(msgId, boxId, kind, build) {
+    const draw = () => { const v = build(); say(msgId, v.msg, kind); renderList(boxId, v.list); };
+    feedback[msgId] = draw; draw();
   }
-  function showImportFailure(msgId, boxId, e) {
-    const rows = e.rejected || null;
-    if (rows && rows.length) {
-      const n = e.rejectedCount != null ? e.rejectedCount : rows.length;
-      say(msgId, `导入已中止：${e.total != null ? `共 ${e.total} 条中有 ` : ''}${n} 条不合格，现有数据没有任何改动。`, 'err');
-      renderProblems(boxId, `不合格的记录（共 ${n} 条，下面最多列出前 ${MAX_SHOW} 条）`, rows, n);
-    } else { say(msgId, e.message, 'err'); $(boxId).classList.add('hidden'); }
+  function clearFeedback(msgId, boxId) { delete feedback[msgId]; say(msgId, ''); renderList(boxId, null); }
+  function showImportFailure(msgId, boxId, e) { setFeedback(msgId, boxId, 'err', () => I18N.failureView(e)); }
+  function showImportResult(msgId, boxId, kind, r) { setFeedback(msgId, boxId, 'ok', () => I18N.resultView(kind, r)); }
+  function showImportNote(msgId, boxId, zh, en) { setFeedback(msgId, boxId, 'err', () => ({ msg: I18N.t(zh, en), list: null })); }
+  function applyLang() {
+    const en = I18N.lang() === 'en';
+    document.documentElement.lang = en ? 'en' : 'zh-CN';
+    $('langBtn').textContent = en ? '中文' : 'English';
+    $('langBtn').title = en ? '切换为中文（目前只影响导入/上传/下载的提示与逐条原因）' : 'Switch to English (currently affects import / upload / download messages and per-row reasons)';
+    for (const f of Object.values(feedback)) f();
   }
-  function showImportResult(msgId, boxId, prefix, r) {
-    say(msgId, importSummary(prefix, r), 'ok');
-    renderProblems(boxId, `被跳过的记录（共 ${r.skipped} 条，下面最多列出前 ${MAX_SHOW} 条）`, r.skippedRows, r.skipped);
-  }
+  function toggleLang() { I18N.setLang(I18N.lang() === 'en' ? 'zh' : 'en'); applyLang(); }
   function download(name, text, mime) {
     const url = URL.createObjectURL(new Blob([text], { type: mime }));
     const a = el('a', { href: url, download: name }); document.body.append(a); a.click(); a.remove();
@@ -446,16 +446,16 @@
   }
   async function doImport() {
     const f = $('impFile').files[0];
-    $('impDetail').classList.add('hidden');
-    if (!f) { say('impMsg', '请选择 JSON 或 CSV 文件', 'err'); return; }
-    if (f.size > 5 * 1024 * 1024) { say('impMsg', '文件超过 5MB', 'err'); return; }
+    clearFeedback('impMsg', 'impDetail');
+    if (!f) { showImportNote('impMsg', 'impDetail', '请选择 JSON 或 CSV 文件', 'Please choose a JSON or CSV file'); return; }
+    if (f.size > 5 * 1024 * 1024) { showImportNote('impMsg', 'impDetail', '文件超过 5MB', 'The file is larger than 5 MB'); return; }
     const mode = document.querySelector('input[name=impMode]:checked').value;
     const where = state.mc.mode === 'cloud' ? '此账户在服务器上现有的' : '本浏览器里现有的';
     if (mode === 'replace' && !(await confirmBox('覆盖导入', `覆盖导入会先清空${where}全部记录，再导入文件内容。会先检查整份文件，有任何一条不合格就整体中止、不动现有数据。确定继续吗？`, '清空并导入', true))) return;
     try {
       const text = await f.text();
       const r = await store().importText(text, mode);
-      showImportResult('impMsg', 'impDetail', '导入完成', r);
+      showImportResult('impMsg', 'impDetail', 'import', r);
       $('impFile').value = ''; await loadMeta();
     } catch (e) { showImportFailure('impMsg', 'impDetail', e); }
   }
@@ -468,13 +468,13 @@
   }
   async function uploadLocal() {
     const remote = state.mc.remote, local = state.mc.local;
-    $('syncDetail').classList.add('hidden');
+    clearFeedback('syncMsg', 'syncDetail');
     if (!remote) return;
     try {
       const text = await local.exportJson();
       const pre = LL.precheck(LL.parseImport(text));
-      if (pre.rejected.length) { showImportFailure('syncMsg', 'syncDetail', Object.assign(new Error('本地有不合格记录'), { rejected: pre.rejected, total: pre.records.length + pre.rejected.length })); return; }
-      if (!pre.records.length) { say('syncMsg', '本地没有记录可上传', 'err'); return; }
+      if (pre.rejected.length) { showImportFailure('syncMsg', 'syncDetail', Object.assign(Object.assign(new Error('本地有不合格记录'), { messageEn: 'Some local records are invalid' }), { rejected: pre.rejected, total: pre.records.length + pre.rejected.length })); return; }
+      if (!pre.records.length) { showImportNote('syncMsg', 'syncDetail', '本地没有记录可上传', 'There are no local records to upload'); return; }
       const mode = await choose('上传本地数据到账户', [
         `把本浏览器里的 ${pre.records.length} 条记录上传到当前登录的账户（云端）。上传前已检查全部记录，均合格。`,
         '合并上传（推荐）：云端已有的记录全部保留；id 相同的以本地为准，其余新增。',
@@ -483,12 +483,12 @@
       if (!mode) return;
       if (mode === 'replace' && !(await confirmBox('确认覆盖云端', '云端现有的全部记录将被清空并替换为本地的记录，无法在本页撤销。建议先在云端模式导出备份。确定覆盖吗？', '覆盖云端', true))) return;
       const r = await remote.importText(text, mode);
-      showImportResult('syncMsg', 'syncDetail', '上传完成', r);
+      showImportResult('syncMsg', 'syncDetail', 'upload', r);
     } catch (e) { showImportFailure('syncMsg', 'syncDetail', e); }
   }
   async function downloadCloud() {
     const remote = state.mc.remote, local = state.mc.local;
-    $('syncDetail').classList.add('hidden');
+    clearFeedback('syncMsg', 'syncDetail');
     if (!remote) return;
     try {
       const mode = await choose('从账户下载到本地', [
@@ -500,7 +500,7 @@
       if (mode === 'replace' && !(await confirmBox('确认覆盖本地', '本浏览器里现有的全部本地记录将被清空并替换为云端的记录。建议先退出云端后导出本地备份。确定覆盖吗？', '覆盖本地', true))) return;
       const text = await remote.exportJson();
       const r = await local.importText(text, mode);
-      showImportResult('syncMsg', 'syncDetail', '下载完成', r);
+      showImportResult('syncMsg', 'syncDetail', 'download', r);
     } catch (e) { showImportFailure('syncMsg', 'syncDetail', e); }
   }
   async function wipeAll() {
@@ -540,6 +540,7 @@
     return s;
   }
   async function init() {
+    $('langBtn').addEventListener('click', toggleLang); applyLang();
     $('loginBtn').addEventListener('click', () => showLogin(''));
     $('loginBackBtn').addEventListener('click', hideLogin);
     $('noticeClose').addEventListener('click', () => { lsSet(NOTICE_KEY, '1'); $('localNotice').classList.add('hidden'); });

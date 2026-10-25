@@ -20,6 +20,8 @@
   var PRICE_HINT = '价格无效（需为不小于 0 的数字，小数请用小数点，如 12.50）';
 
   // ---------- 小工具 ----------
+  /** 带英文消息的错误：message 为中文（默认界面语言），messageEn 供英文界面使用。 */
+  function err(zh, en) { var e = new Error(zh); e.messageEn = en; return e; }
   function str(v) { return v == null ? '' : (typeof v === 'string' ? v : String(v)); }
   function pad(n) { return String(n).padStart(2, '0'); }
   function newId() {
@@ -175,8 +177,8 @@
   }
   function parseJsonImport(text) {
     var obj;
-    try { obj = JSON.parse(text.replace(/^\uFEFF/, '')); } catch (e) { throw new Error('文件不是有效的 JSON'); }
-    if (!obj || typeof obj !== 'object' || obj.app !== 'consumption-tracker' || !Array.isArray(obj.records)) throw new Error('不是本应用导出的备份文件');
+    try { obj = JSON.parse(text.replace(/^\uFEFF/, '')); } catch (e) { throw err('文件不是有效的 JSON', 'The file is not valid JSON'); }
+    if (!obj || typeof obj !== 'object' || obj.app !== 'consumption-tracker' || !Array.isArray(obj.records)) throw err('不是本应用导出的备份文件', 'This is not a backup file exported by this app');
     var items = [], rejected = [];
     obj.records.forEach(function (o, i) {
       var label = '第 ' + (i + 1) + ' 条';
@@ -202,11 +204,11 @@
   }
   function parseCsvImport(text) {
     var rows = parseRows(text);
-    if (!rows.length) throw new Error('CSV 文件为空');
+    if (!rows.length) throw err('CSV 文件为空', 'The CSV file is empty');
     var header = rows[0].map(function (h) { return h.trim(); });
     var col = function () { var names = arguments; for (var i = 0; i < header.length; i++) if (Array.prototype.indexOf.call(names, header[i]) >= 0) return i; return -1; };
     var cDate = col('日期'), cName = col('商品名', '名称'), cPrice = col('单价', '价格'), cQty = col('数量');
-    if (cDate < 0 || cName < 0 || cPrice < 0 || cQty < 0) throw new Error('CSV 表头缺少必需列：日期、商品名、单价、数量');
+    if (cDate < 0 || cName < 0 || cPrice < 0 || cQty < 0) throw err('CSV 表头缺少必需列：日期、商品名、单价、数量', 'The CSV header is missing required columns: date, name, price, quantity (日期, 商品名, 单价, 数量)');
     var cBarcode = col('条码/追溯码', '条码', '编码'), cCat = col('分类'), cBatchName = col('批次/药方', '批次名', '批次'),
       cBatchId = col('批次ID'), cPatient = col('用药人'), cDosage = col('剂量/规格', '剂量'), cNote = col('备注');
     var get = function (r, c) { return c >= 0 && c < r.length ? r[c] : ''; };
@@ -248,7 +250,7 @@
   function txDone(tx) { return new Promise(function (res, rej) { tx.oncomplete = function () { res(); }; tx.onerror = function () { rej(tx.error); }; tx.onabort = function () { rej(tx.error || new Error('事务已中止')); }; }); }
 
   function ImportRejected(rejected, total) {
-    var e = new Error('导入已中止：' + rejected.length + ' 条记录不合格，未改动任何现有数据');
+    var e = err('导入已中止：' + rejected.length + ' 条记录不合格，未改动任何现有数据', 'Import aborted: ' + rejected.length + ' records are invalid; your existing data was not changed');
     e.name = 'ImportRejected'; e.rejected = rejected; e.total = total; return e;
   }
 
@@ -446,7 +448,7 @@
       else {
         var seen = {};
         var newCount = recs.filter(function (r) { if (ids[r.id] || seen[r.id]) return false; seen[r.id] = 1; return true; }).length;
-        if (existing.length + newCount > LIMITS.maxRecords) throw new Error('导入后记录数将超过上限（' + LIMITS.maxRecords + ' 条），已取消');
+        if (existing.length + newCount > LIMITS.maxRecords) throw err('导入后记录数将超过上限（' + LIMITS.maxRecords + ' 条），已取消', 'The record count would exceed the limit of ' + LIMITS.maxRecords + ' after import; cancelled');
       }
       var tx = self.db.transaction(['records', 'products'], 'readwrite');
       var rs = tx.objectStore('records'), ps = tx.objectStore('products');
