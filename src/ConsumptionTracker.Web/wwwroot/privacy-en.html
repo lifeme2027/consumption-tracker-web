@@ -55,10 +55,10 @@
 <li><strong>What is not deleted</strong>: <strong>backup copies that already exist</strong> on the server (including plaintext copies of the database made before you deleted) are not modified when you delete; export files you already downloaded are not deleted; and low-level residue we cannot control (SSD wear levelling, system snapshots, etc.) may remain. So deletion is not an absolute guarantee, and we do not promise one.</li>
 </ul>
 
-<h2>Cloud mode: server backup retention</h2>
+<h2>Cloud mode: server backups and retention</h2>
 <ul>
-<li>The administrator backs up the server database file regularly. Backups are <strong>plaintext</strong> (like the database itself, there is no end-to-end encryption).</li>
-<li>Plaintext backups are kept for <strong>at most 30 days</strong> and then removed by the administrator&rsquo;s cleanup task (see DEPLOY.md). Data you delete in the cloud can therefore still exist in older backups for up to 30 days, until those backups are cleaned up.</li>
+<li>The administrator may back up the server database file. Backups are <strong>plaintext</strong> (like the database itself, there is no end-to-end encryption).</li>
+<li>Backups, including old ones, are <strong>cleaned up by the administrator by hand. We do not promise automatic cleanup or any specific retention period.</strong> Data you delete in the cloud can therefore still exist in backups that were made earlier, until the administrator deletes those backups; the program does not delete them for you.</li>
 <li>Backups are used only for disaster recovery and are not shared with third parties.</li>
 </ul>
 
@@ -66,7 +66,7 @@
 <ul>
 <li>In either mode, opening this site makes the IIS web server in front of the application write ordinary access logs: <strong>time, your IP address, the requested URL path, status code and your browser&rsquo;s User-Agent</strong>.</li>
 <li>These logs <strong>do not contain your record content</strong> (names, notes, person, dose, etc.): that is sent in request bodies, and keyword search also uses the request body, never the URL. They can show that an IP address visited the site or called an endpoint at a given time.</li>
-<li>IIS logs are kept for <strong>at most 30 days</strong> and then removed by the administrator&rsquo;s cleanup task (see DEPLOY.md).</li>
+<li>IIS logs are likewise <strong>cleaned up by the administrator by hand; we do not promise automatic cleanup or any specific retention period.</strong></li>
 <li>In Local mode the page itself submits no records to this site, so the logs only show requests for the page files.</li>
 </ul>
 

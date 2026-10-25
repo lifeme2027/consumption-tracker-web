@@ -5,8 +5,8 @@ namespace ConsumptionTracker.Web.Tests;
 
 /// <summary>
 /// M-1 / L-6 文案的静态约束：删除不再被说成“永久/无法恢复”，而是如实说明 secure_delete / checkpoint / VACUUM 的含义、
-/// 旧备份不会被删、明文备份与 IIS 日志最长保留 30 天；隐私页中英文都要覆盖 12 小时会话、健康敏感信息，
-/// 并把本地模式与云端模式分开写。DEPLOY.md 必须给出清理脚本 / 计划任务。
+/// 已存在的备份和 IIS 日志不会自动删除（由管理员手动清理）；全站不得出现“30 天 / 自动清理 / 计划任务”这类保留期承诺；
+/// 隐私页中英文都要覆盖 12 小时会话、健康敏感信息，并把本地模式与云端模式分开写。
 /// </summary>
 public class PrivacyAndDeleteWordingTests : IDisposable
 {
@@ -48,6 +48,11 @@ public class PrivacyAndDeleteWordingTests : IDisposable
             var t = File.ReadAllText(f);
             foreach (var bad in new[] { "永久", "无法恢复", "不可恢复", "无法找回数据", "permanently", "irrecoverable", "unrecoverable", "cannot be recovered" })
                 Assert.False(t.Contains(bad, StringComparison.OrdinalIgnoreCase), $"{Path.GetFileName(f)} 含有绝对化措辞「{bad}」");
+            // 不得承诺备份 / 日志的保留期或自动清理（jun 已取消自动清理计划）
+            var promise = t.Replace("不承诺自动清理", "").Replace("不会随之自动删除", "").Replace("不会自动删除", "")
+                .Replace("do not promise automatic cleanup", "").Replace("not deleted automatically", "");
+            foreach (var bad in new[] { "30 天", "30天", "最长保留", "自动清理", "自动删除", "计划任务", "清理任务", "30 days", "automatic cleanup", "automatically deleted", "scheduled task", "cleanup task", "at most 30" })
+                Assert.False(promise.Contains(bad, StringComparison.OrdinalIgnoreCase), $"{Path.GetFileName(f)} 含有保留期/自动清理承诺「{bad}」");
         }
     }
 
@@ -59,7 +64,7 @@ public class PrivacyAndDeleteWordingTests : IDisposable
         Assert.Contains("href=\"/privacy.html\"", html);
         Assert.Contains("href=\"/privacy-en.html\"", html);
         var js = await Get("/app.js");
-        foreach (var k in new[] { "secure_delete", "checkpoint", "VACUUM", "备份副本不会被删除", "30 天", "IndexedDB" })
+        foreach (var k in new[] { "secure_delete", "checkpoint", "VACUUM", "备份副本和访问日志不会随之自动删除", "手动清理", "IndexedDB" })
             Assert.Contains(k, js);
     }
 
@@ -67,7 +72,7 @@ public class PrivacyAndDeleteWordingTests : IDisposable
     public async Task ChinesePrivacyPage_CoversRetentionSessionLogsHealth_AndSplitsModes()
     {
         var html = await Get("/privacy.html");
-        foreach (var k in new[] { "12 小时", "30 天", "IIS", "secure_delete", "checkpoint", "VACUUM", "健康", "备份", "已经存在的备份副本" })
+        foreach (var k in new[] { "12 小时", "IIS", "secure_delete", "checkpoint", "VACUUM", "健康", "备份", "已经存在的备份副本", "由管理员手动清理", "不承诺自动清理" })
             Assert.Contains(k, html);
         var local = Section(html, "本地模式（默认");
         Assert.Contains("健康", local);
@@ -78,7 +83,7 @@ public class PrivacyAndDeleteWordingTests : IDisposable
         Assert.Contains("没有端到端加密", cloud);
         Assert.Contains("明文", cloud);
         Section(html, "云端模式：会话有效期");
-        Section(html, "云端模式：服务器备份的保留期");
+        Section(html, "云端模式：服务器备份与保留");
         Section(html, "服务器访问日志");
         Assert.Contains("hreflang=\"en\"", html);                         // 能跳到英文页
         Assert.DoesNotContain("<script", html, StringComparison.OrdinalIgnoreCase);
@@ -89,7 +94,7 @@ public class PrivacyAndDeleteWordingTests : IDisposable
     {
         var html = await Get("/privacy-en.html");
         Assert.Contains("<html lang=\"en\">", html);
-        foreach (var k in new[] { "12 hours", "30 days", "IIS", "secure_delete", "checkpoint", "VACUUM", "health-related sensitive information",
+        foreach (var k in new[] { "12 hours", "IIS", "by hand", "do not promise automatic cleanup", "secure_delete", "checkpoint", "VACUUM", "health-related sensitive information",
                                   "backup copies that already exist", "without end-to-end encryption", "do not promise anonymity" })
             Assert.Contains(k, html);
         var local = Section(html, "Local mode (default");
@@ -100,7 +105,7 @@ public class PrivacyAndDeleteWordingTests : IDisposable
         Assert.Contains("health-related sensitive information", cloud);
         Assert.Contains("plaintext", cloud);
         Section(html, "Cloud mode: session lifetime");
-        Section(html, "Cloud mode: server backup retention");
+        Section(html, "Cloud mode: server backups and retention");
         Section(html, "Server access logs");
         Assert.Contains("hreflang=\"zh-CN\"", html);
         Assert.DoesNotContain("<script", html, StringComparison.OrdinalIgnoreCase);
@@ -113,15 +118,14 @@ public class PrivacyAndDeleteWordingTests : IDisposable
     }
 
     [Fact]
-    public void DeployDoc_HasRetentionCleanupScheduledTask_IisLogs_Redirect_Cert()
+    public void DeployDoc_SaysManualCleanup_NoRetentionPromise_NoCleanupScript_KeepsRedirectCertHosts()
     {
         var root = RepoRoot();
         var doc = File.ReadAllText(Path.Combine(root, "DEPLOY.md"));
-        foreach (var k in new[] { "最长保留 30 天", "cleanup-life.ps1", "Register-ScheduledTask", "-WhatIf", "IIS 日志", "W3SVC", "Permanent", "2026-11-29", "AllowedHosts", "life.db.vacuumed", "已经存在的备份副本不会被程序删除" })
+        foreach (var k in new[] { "手动清理", "不承诺自动清理", "IIS 访问日志", "W3SVC", "Permanent", "2026-11-29", "AllowedHosts", "life.db.vacuumed", "已经存在的备份副本不会被程序删除" })
             Assert.Contains(k, doc);
-        var ps1 = File.ReadAllText(Path.Combine(root, "scripts", "ops", "cleanup-life.ps1"));
-        Assert.Contains("[int]$Days = 30", ps1);
-        Assert.Contains("SupportsShouldProcess", ps1);
-        Assert.DoesNotContain("App_Data", ps1.Replace("不会碰 D:\\Web\\life\\App_Data", ""));   // 脚本逻辑不能碰数据目录（注释里的说明除外）
+        foreach (var bad in new[] { "30 天", "最长保留", "Register-ScheduledTask", "cleanup-life", "-WhatIf" })
+            Assert.DoesNotContain(bad, doc);
+        Assert.False(File.Exists(Path.Combine(root, "scripts", "ops", "cleanup-life.ps1")), "cleanup-life.ps1 不应留在仓库里");
     }
 }
