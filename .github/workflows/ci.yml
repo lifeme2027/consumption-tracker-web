@@ -28,6 +28,11 @@ jobs:
           node --test
       - name: Smoke (Kestrel + curl)
         run: bash scripts/smoke.sh
+      - name: Browser UI regression (headless Chrome, 本地模式 + 云端开发登录模式)
+        run: |
+          cd scripts/e2e
+          npm ci
+          npm test
       - uses: actions/upload-artifact@v4
         if: always()
         with:
