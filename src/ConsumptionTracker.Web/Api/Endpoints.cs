@@ -250,11 +250,17 @@ public static class Endpoints
             catch (Exception e) when (e is FormatException or System.Text.Json.JsonException or InvalidDataException or ArgumentException or OverflowException or InvalidOperationException)
             { return Bad("无法解析导入内容，请确认是本应用导出的 JSON 或 CSV"); }
 
+            var totalRows = parsed.Records.Count + parsed.Issues.Count;
+            // 覆盖模式：全量预检——只要有一条不合格就整体中止，返回逐条原因，绝不清空现有数据
+            if (importMode == ImportMode.Replace && parsed.Issues.Count > 0)
+                return Rejected(parsed.Issues, totalRows);
             try
             {
                 var s = Repo(ctx, store).Import(parsed.Records, parsed.Products, importMode);
-                return Results.Ok(new { added = s.Added, updated = s.Updated, skipped = s.Skipped + parsed.Skipped });
+                var skipped = s.Skipped + parsed.Issues.Count;
+                return Results.Ok(new { added = s.Added, updated = s.Updated, skipped, skippedRows = IssueRows(parsed.Issues), total = totalRows });
             }
+            catch (ImportRejectedException e) { return Rejected(e.Issues, e.Total); }
             catch (InvalidOperationException e) { return Bad(e.Message); }
         });
 
@@ -270,6 +276,19 @@ public static class Endpoints
     private static string Addr(HttpContext ctx) => (string)ctx.Items[AddressKey]!;
     private static UserRepository Repo(HttpContext ctx, UserStore store) => store.ForUser(Addr(ctx));
     private static IResult Bad(string? msg) => Results.Json(new { error = msg ?? "请求无效" }, statusCode: 400);
+    private const int MaxIssueRows = 200;   // 响应里最多列出的行数；总数另有 rejectedCount / skipped
+
+    private static object[] IssueRows(IReadOnlyList<ImportIssue> issues) =>
+        issues.Take(MaxIssueRows).Select(i => (object)new { row = i.Row, label = i.Label, labelEn = i.LabelEn, reason = i.Reason, reasonEn = i.ReasonEn }).ToArray();
+
+    private static IResult Rejected(IReadOnlyList<ImportIssue> issues, int total) =>
+        Results.Json(new
+        {
+            error = $"导入已中止：{total} 条中有 {issues.Count} 条不合格，现有数据没有任何改动",
+            errorEn = $"Import aborted: {issues.Count} of {total} records are invalid; your existing data was not changed",
+            rejected = IssueRows(issues), rejectedCount = issues.Count, total,
+        }, statusCode: 422);
+
     private static IResult NotFound() => Results.Json(new { error = "记录不存在" }, statusCode: 404);
 
     private static IResult File(HttpContext ctx, byte[] bytes, string contentType, string fileName)

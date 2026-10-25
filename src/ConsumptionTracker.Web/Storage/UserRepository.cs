@@ -223,6 +223,12 @@ public sealed class UserRepository : IRecordRepository
     public ImportSummary Import(IEnumerable<RecordItem> records, IEnumerable<Product> products, ImportMode mode)
     {
         var recordList = records.ToList();
+        // 覆盖导入：先对全部记录做完整预检；有任何一条不合格就整体中止，不清空任何现有数据
+        if (mode == ImportMode.Replace)
+        {
+            var issues = ImportRejectedException.Precheck(recordList);
+            if (issues.Count > 0) throw new ImportRejectedException(issues, recordList.Count);
+        }
         var added = 0; var updated = 0; var skipped = 0;
         using var x = Open();
         using var tx = x.Conn.BeginTransaction();
@@ -236,7 +242,7 @@ public sealed class UserRepository : IRecordRepository
         foreach (var raw in recordList)
         {
             var r = RecordValidator.Sanitize(raw);
-            if (r == null || RecordLimits.Check(r) != null) { skipped++; continue; }
+            if (r == null || RecordLimits.Check(r) != null) { skipped++; continue; }   // 仅合并模式可达：覆盖模式已预检
             var exists = x.Scalar<long>("SELECT COUNT(*) FROM records WHERE address = $a AND id = $id", tx, ("$id", r.Id)) > 0;
             if (!exists && ++count > _maxRecords) throw new InvalidOperationException($"导入后记录数将超过上限（{_maxRecords} 条），已取消");
             Upsert(x, tx, r);
