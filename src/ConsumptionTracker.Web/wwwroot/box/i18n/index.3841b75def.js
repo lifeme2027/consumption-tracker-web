@@ -1,6 +1,6 @@
 // 极简 i18n：字典是普通对象（键 → 文案，{name} 占位）。所有界面文字都来自字典文件，不写在 JS/HTML 逻辑里。
-import zh from './zh.35af188bb4.js';
-import en from './en.ca7d92e442.js';
+import zh from './zh.d04bfe9ac1.js';
+import en from './en.496024624f.js';
 
 export const DICTS = Object.freeze({ zh, en });
 export const LANGS = Object.freeze(['zh', 'en']);

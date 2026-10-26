@@ -1,12 +1,12 @@
 {
   "name": "scalebridge-web",
   "version": "0.1.0",
-  "commit": "44516783c832",
+  "commit": "8eefb2098a5e",
   "source": "https://github.com/composehk/scalebridge/tree/main/web",
   "files": [
     {
-      "path": "build-info.fa43167ebb.js",
-      "sha256": "fa43167ebb144a2ba0bc664457a1657c117d60413efbf260135ce20ecd62cda2",
+      "path": "build-info.6e32affd22.js",
+      "sha256": "6e32affd221bce5e6f90b0154e37e77d0e0ad63a6c999c905cbc0b64a219c5da",
       "bytes": 82
     },
     {
@@ -25,9 +25,9 @@
       "bytes": 3943
     },
     {
-      "path": "core/detect.19b52f9393.js",
-      "sha256": "19b52f9393c671634cfa9898ee83ec720277cc87fea58a3abadadc0a25a10180",
-      "bytes": 1997
+      "path": "core/detect.5311386e43.js",
+      "sha256": "5311386e43af4a39b6f88ac958de577e8ce5b130908edbb5a59d291c8a7ee712",
+      "bytes": 2557
     },
     {
       "path": "core/export.d16d97726f.js",
@@ -65,6 +65,11 @@
       "bytes": 11752
     },
     {
+      "path": "core/status.1d415fe78d.js",
+      "sha256": "1d415fe78dc68518144ecb519f4cdbfb7c1211c2ada8cdcb5f1064d3b3e14458",
+      "bytes": 1172
+    },
+    {
       "path": "core/store.f1047b4f3e.js",
       "sha256": "f1047b4f3e7d6aedbbdddfefa82f231b475f0174c30eb38fee1b081b0b2bf7c6",
       "bytes": 5901
@@ -75,44 +80,44 @@
       "bytes": 2568
     },
     {
-      "path": "i18n/en.ca7d92e442.js",
-      "sha256": "ca7d92e4425ec6ee77471bbbfb428171f4ed8bf12fb993bb0bb82f8bcf079f58",
-      "bytes": 16000
+      "path": "i18n/en.496024624f.js",
+      "sha256": "496024624f93d58281949e758b497fe246e5d4a4e4044bb9f95eeffafc8619df",
+      "bytes": 17804
     },
     {
-      "path": "i18n/index.430b69b1ad.js",
-      "sha256": "430b69b1adb8688356a837cdd4538b2f3a72916007befa46ad436d95749bc94a",
+      "path": "i18n/index.3841b75def.js",
+      "sha256": "3841b75def4256d4bd94d78f32b6534885ada12bcb885bce70622043bf51396e",
       "bytes": 1611
     },
     {
-      "path": "i18n/zh.35af188bb4.js",
-      "sha256": "35af188bb4198de07c6e6e7158f0331b06619dab8ecca1c23ad720a40e2175f9",
-      "bytes": 15308
+      "path": "i18n/zh.d04bfe9ac1.js",
+      "sha256": "d04bfe9ac1e90e617b0aa6651b237657fed0f80dc32ebb2a6d14865aec3690e3",
+      "bytes": 16925
     },
     {
       "path": "index.html",
-      "sha256": "02b3acf6974007550003dc6241411505e50b1ac0748669a21e6d0c6aee56b7a5",
-      "bytes": 8599
+      "sha256": "07eafb99abd4138bd7d5480a557a9bcb4b5e3375a75ece4830e1b446be76eb05",
+      "bytes": 8632
     },
     {
-      "path": "main.52c8f74819.js",
-      "sha256": "52c8f7481911a4d471923b303c142e56dfbeeead836d9132a49dc485abc38d0d",
-      "bytes": 18616
+      "path": "main.6932a3799d.js",
+      "sha256": "6932a3799df4700693ad4df4f1a9c226120a93dc1e8e7592d612ddd08539047a",
+      "bytes": 21087
     },
     {
-      "path": "privacy.f9b0ccde2a.js",
-      "sha256": "f9b0ccde2a800977cd942cdfe821fb6d02103e900da6466f33b8cedbaab2703d",
+      "path": "privacy.8f18ff86b4.js",
+      "sha256": "8f18ff86b4a0c96c8029e13af57c18b4547f46233b274d73b8e027c73bcade9c",
       "bytes": 902
     },
     {
       "path": "privacy.html",
-      "sha256": "8b9cfe3279c764821e5a17bac0a64baac85dc695a48d8d544941510178caaccb",
-      "bytes": 1621
+      "sha256": "baae1b191a137bb59643c8cb7b297f6518e143bec0a5df2005b434599313b92b",
+      "bytes": 1787
     },
     {
-      "path": "style.6729932a6d.css",
-      "sha256": "6729932a6d0d2e2c9e7d143eb6d237a471b87c58f84af370eb43b8add1c63c47",
-      "bytes": 4174
+      "path": "style.1b7e7c9dec.css",
+      "sha256": "1b7e7c9dec184d1ee4eec4d81a60d4df784e340de4204ff3fb6eff32d0394923",
+      "bytes": 4624
     }
   ]
 }

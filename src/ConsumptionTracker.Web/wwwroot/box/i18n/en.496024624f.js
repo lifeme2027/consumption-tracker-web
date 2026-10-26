@@ -29,7 +29,7 @@ export default {
   'support.avail.false': 'not available',
 
   'connect.heading': 'Connect a Bluetooth scale',
-  'connect.intro': 'After you click the button the browser shows a device chooser. Only the Weight Scale (0x181D), Body Composition (0x181B) and Device Information (0x180A) services are accessed. A user click is required; a web page cannot connect in the background.',
+  'connect.intro': 'After you click the button the browser shows a device chooser. Only the Weight Scale (0x181D), Body Composition (0x181B) and Device Information (0x180A) services are accessed. A user click is required; a web page cannot connect in the background. If the connection drops after it succeeded, the page retries the device you just authorized up to 3 times (no chooser again); if that still fails you need to click "Reconnect the last device" yourself.',
   'connect.button': 'Choose and connect a device',
   'connect.reconnect': 'Reconnect the last device',
   'connect.disconnect': 'Disconnect',
@@ -222,8 +222,12 @@ export default {
   'privacy.nocloud.p': 'There are no accounts, no cloud backup and no cross-device sync. To move data to another device, export a file and import it there.',
   'privacy.ble.h': 'Bluetooth permission',
   'privacy.ble.p': 'The page can only access a device after you click "Choose and connect a device" and pick it in the browser chooser; it cannot see the Bluetooth MAC address and cannot scan for devices when you are not interacting.',
+  'privacy.reconnect.h': 'Disconnects and reconnecting',
+  'privacy.reconnect.p': 'If the device drops after a successful connection, the page automatically reconnects to that same device, the one you just authorized in the chooser, up to 3 times (about 1, 2 and 4 seconds apart; the page shows "attempt n/3"). Reconnecting does not open the chooser again and never targets a device you did not pick. After 3 failed attempts the page stops retrying and tells you the connection was lost; you then need to click "Reconnect the last device" (or pick a device again) yourself. After you press "Disconnect" it does not reconnect on its own. After you reload or close the page the page does not keep the authorization (it does not use getDevices), so you have to click connect and pick the device again.',
   'privacy.demo.h': 'Demo data',
   'privacy.demo.p': 'Demo data is fictional and only illustrates the interface and export formats; it is clearly labelled in the interface and in exports, and can be cleared with one click.',
   'privacy.clear.h': 'How to clear',
   'privacy.clear.p': 'Under "History" on the main page you can delete one record, clear the demo data, or clear everything; you can also clear this site\'s data in the browser settings.',
+  'privacy.origin.h': 'Same origin as the main site',
+  'privacy.origin.p': '/box and the main site (life.kastop.com) share the same origin (same scheme, host and port). Browsers separate Web Storage and IndexedDB by origin, not by path. /box only uses one IndexedDB database named scalebridge; the main site (the expense tracker) uses a differently named database and its own local-storage keys, and neither side\'s code reads the other\'s data. That is a convention in the code, not a wall enforced by the browser between /box and the main site (scripts of the same origin can technically reach the same origin\'s storage). The same origin also shares one storage quota, and the browser\'s "clear site data" works per origin, so it wipes both /box and the main site\'s local data in this browser.',
 };

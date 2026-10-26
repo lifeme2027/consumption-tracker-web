@@ -10,6 +10,8 @@ export function detectSupport(nav = globalThis.navigator, win = globalThis) {
   return {
     hasBluetooth,
     secureContext: win.isSecureContext === true,
+    // 浏览器是否给出了 isSecureContext 这个布尔值；老浏览器没有它（也没有 Web Bluetooth），那时不能断言「不是 HTTPS」。
+    secureKnown: typeof win.isSecureContext === 'boolean',
     hasGetAvailability: hasBluetooth && typeof nav.bluetooth.getAvailability === 'function',
     hasWatchAdvertisements: !!(BD && BD.prototype && 'watchAdvertisements' in BD.prototype),
     hasIndexedDB: !!win.indexedDB,
@@ -38,8 +40,13 @@ export async function getAvailability(nav = globalThis.navigator) {
   }
 }
 
-/** 汇总成界面用的状态码：'ok' | 'noApi' | 'insecure' | 'noAdapter'。 */
+/**
+ * 汇总成界面用的状态码：'ok' | 'noApi' | 'insecure' | 'noAdapter'。
+ * 必须先判安全上下文：在非安全上下文（http 且非 localhost）里 navigator.bluetooth 根本不存在（[SecureContext]），
+ * 如果先判 hasBluetooth，用户只会看到「浏览器不支持」，而真正的原因是「需要 HTTPS」。
+ */
 export function supportLevel(sup, availability) {
+  if (!sup.secureContext && sup.secureKnown !== false) return 'insecure';
   if (!sup.hasBluetooth) return 'noApi';
   if (!sup.secureContext) return 'insecure';
   if (availability === false) return 'noAdapter';

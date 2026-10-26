@@ -1,8 +1,8 @@
 // ScaleBridge Web 入口：把存储、解析管线、蓝牙控制器与界面接起来。
 // 约束：不用 innerHTML（只用 textContent）；不用 Web Worker；不发任何网络请求；解析与 IndexedDB 都在主线程。
-import { applyDom, makeT, resolveLang } from './i18n/index.430b69b1ad.js';
+import { applyDom, makeT, resolveLang } from './i18n/index.3841b75def.js';
 import { openStore } from './core/store.f1047b4f3e.js';
-import { detectSupport, getAvailability, supportLevel } from './core/detect.19b52f9393.js';
+import { detectSupport, getAvailability, supportLevel } from './core/detect.5311386e43.js';
 import { ConnectionController } from './core/ble.62cdfcf5ad.js';
 import { DEMO_DEVICE, DEMO_SCENARIOS } from './core/fake.0c2e641913.js';
 import { processValue } from './core/pipeline.add5d7a784.js';
@@ -13,7 +13,8 @@ import { parseHex } from './core/bytes.ae517095e7.js';
 import { parseCharacteristic } from './core/protocol.19124bbe03.js';
 import { detailRows, tagFor, timeText, weightText } from './core/view.19f30d22f8.js';
 import { decideIngest, isAbnormal, isDeviceClockSuspect } from './core/policy.bc3a5a457f.js';
-import { BUILD } from './build-info.fa43167ebb.js';
+import { msg, renderMsg, renderParts } from './core/status.1d415fe78d.js';
+import { BUILD } from './build-info.6e32affd22.js';
 
 const $ = (id) => document.getElementById(id);
 const MAX_ROWS = 300;
@@ -31,7 +32,11 @@ const S = {
   connError: null,
   connInfo: [],
   info: null,
-  storeError: null,
+  storeError: null, // 消息 {key, params}，不是已翻译的字符串
+  // 已生成的状态消息：存「键 + 参数」，切换语言时按新语言重渲染（SBW-L04）。
+  msgs: { export: null, note: null },
+  importResult: null, // importAuto / readFileText 的结果对象，按当前语言渲染
+  dbgParts: [], // 调试面板输出：字符串（JSON 原文）或消息
   ctl: null,
 };
 
@@ -86,10 +91,14 @@ function renderConnection() {
     : '';
   if (e) $('conn-error').dataset.code = e.code; else delete $('conn-error').dataset.code;
   const info = $('conn-info');
-  clear(info);
   const lines = [];
   if (S.info) lines.push(t('connect.info', { manufacturer: S.info.manufacturer ?? t('connect.unknownValue'), model: S.info.model ?? t('connect.unknownValue') }));
   for (const l of S.connInfo) lines.push(t(l.key, l.params));
+  // conn-info 是 aria-live="polite" 区域：内容没变就不要重写 DOM（renderConnection 在每次状态变化时都会被调用），否则读屏会反复播报同一段话。
+  const sig = lines.join('\n');
+  if (info.dataset.sig === sig) return;
+  info.dataset.sig = sig;
+  clear(info);
   lines.forEach((text, i) => { if (i) info.append(el('br')); info.append(text); });
 }
 
@@ -143,9 +152,9 @@ function renderHistory() {
       el('td', {}, del)));
   }
   const warn = $('store-warning');
-  const msg = S.storeError ?? (S.store && !S.store.persistent ? t('store.memoryOnly') : null);
-  warn.hidden = !msg;
-  warn.textContent = msg ?? '';
+  const text = S.storeError ? renderMsg(t, S.storeError) : (S.store && !S.store.persistent ? t('store.memoryOnly') : null);
+  warn.hidden = !text;
+  warn.textContent = text ?? '';
 }
 
 function renderDemoButtons() {
@@ -175,6 +184,15 @@ function renderNotes() {
   }
 }
 
+/** 导出 / 备注 / 导入结果 / 调试输出：全部由「键 + 参数」按当前语言渲染。 */
+function renderStatus() {
+  // 这几个元素是 role="status"：文字没变就不要重写，避免读屏重复播报。
+  for (const [id, text] of [['export-msg', renderMsg(S.t, S.msgs.export)], ['note-msg', renderMsg(S.t, S.msgs.note)], ['dbg-out', renderParts(S.t, S.dbgParts)]]) {
+    const node = $(id);
+    if (node.textContent !== text) node.textContent = text;
+  }
+}
+
 function renderAll() {
   applyDom(document, S.t, S.lang);
   $('lang-select').value = S.settings.lang;
@@ -187,6 +205,8 @@ function renderAll() {
   renderHistory();
   renderLimits();
   renderNotes();
+  renderStatus();
+  renderImportResult(S.importResult);
 }
 
 /* ---------- 数据 ---------- */
@@ -209,7 +229,7 @@ async function addRecords(recs) {
     await S.store.add(recs);
     S.storeError = null;
   } catch (e) {
-    S.storeError = S.t('store.writeFailed', { detail: String(e?.message ?? e) });
+    S.storeError = msg('store.writeFailed', { detail: String(e?.message ?? e) });
     renderHistory();
     return false;
   }
@@ -219,7 +239,7 @@ async function addRecords(recs) {
 
 async function setSetting(key, value) {
   S.settings[key] = value;
-  try { await S.store.setSetting(key, value); } catch (e) { S.storeError = S.t('store.writeFailed', { detail: String(e?.message ?? e) }); }
+  try { await S.store.setSetting(key, value); } catch (e) { S.storeError = msg('store.writeFailed', { detail: String(e?.message ?? e) }); }
 }
 
 function setLang(pref) {
@@ -269,21 +289,22 @@ function download(name, mime, text) {
 }
 
 function doExport(kind) {
-  const msg = $('export-msg');
-  if (S.records.length === 0) { msg.textContent = S.t('io.exportNone'); return; }
+  if (S.records.length === 0) { S.msgs.export = msg('io.exportNone'); renderStatus(); return; }
   const recs = [...S.records].sort(compareRecords);
   const hasDemo = recs.some((r) => r.demo);
   const now = new Date();
   const name = exportFileName(kind, now, hasDemo);
   if (kind === 'csv') download(name, 'text/csv;charset=utf-8', toCsv(recs));
   else download(name, 'application/json;charset=utf-8', toJson(recs, now));
-  msg.textContent = S.t(hasDemo ? 'io.exportedDemo' : 'io.exported', { n: recs.length, file: name });
+  S.msgs.export = msg(hasDemo ? 'io.exportedDemo' : 'io.exported', { n: recs.length, file: name });
+  renderStatus();
 }
 
 function renderImportResult(res) {
   const { t } = S;
   const box = $('import-result');
   clear(box);
+  if (!res) return;
   if (!res.ok) {
     box.append(el('p', { class: 'error', text: t('io.importFailed', { reason: t(`io.fatal.${res.error}`) }) }));
     return;
@@ -305,30 +326,39 @@ async function doImport(text) {
   if (res.ok) {
     res.added = 0;
     if (res.records.length > 0) {
-      if (!(await addRecords(res.records))) { renderImportResult({ ok: false, error: 'storeFailed' }); return; }
+      if (!(await addRecords(res.records))) { S.importResult = { ok: false, error: 'storeFailed' }; renderImportResult(S.importResult); return; }
       res.added = res.records.length;
     }
   }
+  S.importResult = res;
   renderImportResult(res);
 }
 
 /* ---------- 调试面板 ---------- */
 
 function debugParse(save) {
-  const out = $('dbg-out');
   const [svcHex, chHex] = $('dbg-char').value.split(':');
   const service = parseInt(svcHex, 16), ch = parseInt(chHex, 16);
   const h = parseHex($('dbg-hex').value);
-  if (!h.ok) { out.textContent = S.t('debug.badHex', { reason: S.t(`hex.${h.error}`) }); return; }
+  if (!h.ok) { S.dbgParts = [msg('debug.badHex', { reason: msg(`hex.${h.error}`) })]; renderStatus(); return; }
   const r = parseCharacteristic(service, ch, h.bytes);
-  out.textContent = JSON.stringify(r.ok ? { reject: false, warnings: r.warnings, expect: r.value } : { reject: true, errorCode: r.errorCode }, null, 2);
+  const parts = [JSON.stringify(r.ok ? { reject: false, warnings: r.warnings, expect: r.value } : { reject: true, errorCode: r.errorCode }, null, 2)];
+  S.dbgParts = parts;
+  renderStatus();
   if (!save) return;
   const res = processValue(service, ch, h.bytes, { deviceId: 'DEMO:debug-panel', deviceName: 'Debug panel', isDemo: true });
-  if (res.kind !== 'record') { out.textContent += '\n\n' + S.t('debug.noRecord'); return; }
-  ingestLive(res.record).then((r) => { if (r !== 'failed') out.textContent += '\n\n' + S.t(r === 'save' ? 'debug.saved' : `ingest.${r}`); });
+  if (res.kind !== 'record') { parts.push(msg('debug.noRecord')); renderStatus(); return; }
+  ingestLive(res.record).then((r) => {
+    if (r === 'failed') return;
+    parts.push(msg(r === 'save' ? 'debug.saved' : `ingest.${r}`));
+    if (S.dbgParts === parts) renderStatus();
+  });
 }
 
 /* ---------- 事件 ---------- */
+
+/** 「历史记录」标题带 tabindex="-1"，只用来接住焦点（不进 Tab 顺序）。 */
+function focusHistoryHeading() { $('history-h').focus(); }
 
 function wireEvents() {
   $('lang-select').addEventListener('change', async (e) => { setLang(e.target.value); await setSetting('lang', e.target.value); renderAll(); });
@@ -344,26 +374,35 @@ function wireEvents() {
     const sc = DEMO_SCENARIOS.find((x) => x.id === id);
     if (!sc) return;
     const res = processValue(sc.service, sc.characteristic, sc.build(new Date()), DEMO_DEVICE);
-    if (res.kind !== 'record') { $('export-msg').textContent = S.t('demo.error', { code: res.errorCode ?? res.kind }); return; }
+    if (res.kind !== 'record') { S.msgs.export = msg('demo.error', { code: res.errorCode ?? res.kind }); renderStatus(); return; }
     const r = await ingestLive(res.record);
-    if (r !== 'failed') $('export-msg').textContent = S.t(r === 'save' ? 'demo.added' : `ingest.${r}`);
+    if (r !== 'failed') { S.msgs.export = msg(r === 'save' ? 'demo.added' : `ingest.${r}`); renderStatus(); }
   });
 
   $('history-rows').addEventListener('click', async (e) => {
     const id = Number(e.target?.dataset?.id);
     if (!Number.isInteger(id)) return;
+    const idx = [...$('history-rows').children].findIndex((tr) => tr.dataset.id === String(id));
     await S.store.remove(id);
     await reload();
+    // 删除后焦点留在原来的位置（下一行的删除按钮；删的是最后一行就落到新的最后一行；没有行了就落到「历史记录」标题），
+    // 否则被删掉的按钮消失，焦点会丢到 <body>（SBW-L03）。
+    const buttons = $('history-rows').querySelectorAll('[data-testid="history-delete"]');
+    if (buttons.length) buttons[Math.min(Math.max(idx, 0), buttons.length - 1)].focus();
+    else focusHistoryHeading();
   });
   $('btn-clear-demo').addEventListener('click', async () => {
     if (!window.confirm(S.t('history.confirmClearDemo'))) return;
     await S.store.removeDemo();
     await reload();
+    if ($('btn-clear-demo').disabled) focusHistoryHeading(); // 按钮已无事可做被禁用，焦点不能留在禁用按钮上
   });
   $('btn-clear-all').addEventListener('click', async () => {
     if (!window.confirm(S.t('history.confirmClear'))) return;
     await S.store.clearMeasurements();
     await reload();
+    if ($('btn-clear-all').disabled) focusHistoryHeading();
+    if (document.activeElement === document.body) focusHistoryHeading();
   });
 
   $('btn-export-csv').addEventListener('click', () => doExport('csv'));
@@ -373,7 +412,7 @@ function wireEvents() {
     const f = e.target.files?.[0];
     if (!f) return;
     const r = await readFileText(f);
-    if (!r.ok) renderImportResult({ ok: false, error: r.error });
+    if (!r.ok) { S.importResult = { ok: false, error: r.error }; renderImportResult(S.importResult); }
     else await doImport(r.text);
     e.target.value = '';
   });
@@ -381,12 +420,12 @@ function wireEvents() {
   $('btn-note-save').addEventListener('click', async () => {
     const raw = $('note-id').value.trim();
     const text = $('note-text').value.trim();
-    const msg = $('note-msg');
-    if (!/^\d{1,3}$/.test(raw) || Number(raw) > 254) { msg.textContent = S.t('settings.noteBad'); return; }
+    if (!/^\d{1,3}$/.test(raw) || Number(raw) > 254) { S.msgs.note = msg('settings.noteBad'); renderStatus(); return; }
     const notes = { ...S.settings.userNotes };
     const key = String(Number(raw));
-    if (text === '') { delete notes[key]; msg.textContent = S.t('settings.noteDeleted'); } else { notes[key] = text.slice(0, 40); msg.textContent = S.t('settings.noteSaved'); }
+    if (text === '') { delete notes[key]; S.msgs.note = msg('settings.noteDeleted'); } else { notes[key] = text.slice(0, 40); S.msgs.note = msg('settings.noteSaved'); }
     await setSetting('userNotes', notes);
+    renderStatus();
     renderNotes();
     renderLatest();
   });

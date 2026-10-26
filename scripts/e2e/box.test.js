@@ -68,7 +68,7 @@ async function openBox(opts = {}) {
     Object.defineProperty(navigator, 'languages', { get: () => ['zh-CN', 'zh'] });
     Object.defineProperty(navigator, 'language', { get: () => 'zh-CN' });
   });
-  if (opts.beforeLoad) await page.evaluateOnNewDocument(opts.beforeLoad);
+  if (opts.beforeLoad) await page.evaluateOnNewDocument(opts.beforeLoad, opts.args);
   await page.goto(base + (opts.url ?? '/box'), { waitUntil: 'networkidle0' });
   await page.waitForSelector('html[data-ready="1"]');
   return { ctx, page, log };
@@ -229,5 +229,203 @@ test('连接看门狗（用桩 Bluetooth，不涉及真实硬件）：connect �
   assert.ok((await text(page, 'conn-error')).length > 0);
   assert.match(await page.$eval(sel('conn-state'), (e) => e.dataset.state), /disconnected|idle/);
   assert.equal(await page.$eval(sel('btn-connect'), (b) => b.disabled), false, '超时后可以重试');
+  await ctx.close();
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// 验收后修复的回归（SBW-M01 / L01 / L02 / L03 / L04）
+// ---------------------------------------------------------------------------------------------------------------------
+const reflow = (p) => p.evaluate(() => ({
+  scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth,
+  bodyScroll: document.body.scrollWidth, inner: window.innerWidth,
+}));
+
+test('SBW-M01 窄屏（320/360/390）整页不横向滚动：初始、有历史记录、长设备名、展开调试面板、隐私页', async () => {
+  const longName = 'ScaleBridge-' + 'X'.repeat(70);   // 没有空格的超长设备名
+  const { ctx, page } = await openBox({
+    beforeLoad: (name) => {
+      const dev = { id: 'stub', name, addEventListener() {}, removeEventListener() {}, gatt: { connected: false, connect: () => new Promise(() => {}), disconnect() {} } };
+      Object.defineProperty(navigator, 'bluetooth', { configurable: true, value: { getAvailability: async () => true, requestDevice: async () => dev } });
+    },
+    args: longName,
+  });
+  const numbers = {};
+  const check = async (what) => {
+    for (const w of [320, 360, 390]) {
+      await page.setViewport({ width: w, height: 800 });
+      await sleep(50);
+      const r = await reflow(page);
+      numbers[`${what}@${w}`] = `${r.scroll}/${r.client}`;
+      assert.ok(r.scroll <= r.client, `${what} @${w}px：documentElement.scrollWidth ${r.scroll} > clientWidth ${r.client}`);
+      assert.ok(r.bodyScroll <= r.client, `${what} @${w}px：body.scrollWidth ${r.bodyScroll} > clientWidth ${r.client}`);
+    }
+  };
+  await check('初始');
+  // 多条历史记录（表格在自己的容器里滚动，不能撑宽页面）
+  for (const d of ['demo-si-full', 'demo-body-composition', 'demo-imperial', 'demo-si-basic']) {
+    const n = await rowCount(page);
+    await page.click(sel(d));
+    await waitFor(async () => (await rowCount(page)) > n, d);
+  }
+  await check('有历史记录');
+  // 展开调试面板 + 很长的十六进制输入 + 设置里的备注
+  await page.$eval(sel('debug') + ' details', (d) => { d.open = true; });
+  await page.$eval(sel('dbg-hex'), (e, v) => { e.value = v; }, 'AB'.repeat(250));
+  await page.$eval(sel('import-text'), (e, v) => { e.value = v; }, 'x'.repeat(400));
+  await check('调试面板展开');
+  // 连接中的设备名（超长且无空格）
+  await page.click(sel('btn-connect'));
+  await waitFor(async () => (await page.$eval(sel('conn-state'), (e) => e.dataset.state)) === 'connecting', '连接中', 3000);
+  assert.ok((await text(page, 'conn-device')).includes(longName), '界面确实显示了超长设备名');
+  await check('长设备名');
+  // 导入结果里的长错误文字
+  await page.$eval(sel('import-text'), (e, v) => { e.value = v; }, '{"' + 'k'.repeat(300) + '":1}');
+  await page.click(sel('btn-import'));
+  await sleep(300);
+  await check('导入失败提示');
+  await page.goto(base + '/box/privacy.html', { waitUntil: 'networkidle0' });
+  await page.waitForSelector('html[data-ready="1"]');
+  await check('隐私页');
+  console.log('reflow scrollWidth/clientWidth:', JSON.stringify(numbers));
+  await ctx.close();
+});
+
+test('SBW-L01 非安全上下文：显示「需要 HTTPS」（navigator.bluetooth 此时不存在），连接按钮禁用，演示数据仍可用', async () => {
+  const { ctx, page } = await openBox({
+    beforeLoad: () => {
+      Object.defineProperty(window, 'isSecureContext', { configurable: true, value: false });
+      delete Navigator.prototype.bluetooth; try { delete navigator.bluetooth; } catch { /* */ }   // [SecureContext]：非安全上下文里没有它
+    },
+  });
+  assert.equal(await page.evaluate(() => [window.isSecureContext, 'bluetooth' in navigator]).then((a) => a.join()), 'false,false');
+  assert.equal(await page.$eval(sel('support-msg'), (e) => e.dataset.level), 'insecure');
+  assert.match(await text(page, 'support-msg'), /HTTPS/);
+  assert.equal(await page.$eval(sel('btn-connect'), (b) => b.disabled), true);
+  await page.click(sel('demo-si-basic'));
+  await waitFor(async () => (await rowCount(page)) === 1, '非安全上下文下演示数据仍可入库');
+  await page.select(sel('lang-select'), 'en');
+  await waitFor(async () => /HTTPS/.test(await text(page, 'support-msg')) && !/[\u4e00-\u9fff]/.test(await text(page, 'support-msg')), '英文提示');
+  await ctx.close();
+});
+
+test('SBW-L01 真实的非安全上下文：经由非回环 IP 的 http 访问（Chrome 视为不安全，navigator.bluetooth 不存在）', async (t) => {
+  const ip = Object.values(os.networkInterfaces()).flat().find((i) => i && i.family === 'IPv4' && !i.internal)?.address;
+  if (!ip) return t.skip('这台机器没有非回环 IPv4 地址');
+  const port = await freePort();
+  const srv = spawn('dotnet', [DLL], {
+    cwd: path.join(ROOT, 'src', 'ConsumptionTracker.Web'),
+    env: { ...process.env, ASPNETCORE_ENVIRONMENT: 'Production', Life__Storage__DataDir: dataDir, ASPNETCORE_URLS: `http://0.0.0.0:${port}` },
+    stdio: 'ignore',
+  });
+  try {
+    const url = `http://${ip}:${port}`;
+    for (let i = 0; i < 100; i++) { try { if ((await fetch(url + '/healthz')).ok) break; } catch { /* 等待启动 */ } await sleep(200); }
+    const ctx = await browser.createBrowserContext();
+    const page = await ctx.newPage();
+    await page.goto(url + '/box', { waitUntil: 'networkidle0' });
+    await page.waitForSelector('html[data-ready="1"]');
+    assert.equal(await page.evaluate(() => [window.isSecureContext, 'bluetooth' in navigator].join()), 'false,false');
+    assert.equal(await page.$eval(sel('support-msg'), (e) => e.dataset.level), 'insecure');
+    assert.match(await text(page, 'support-msg'), /HTTPS/);
+    await ctx.close();
+  } finally { srv.kill(); }
+});
+
+test('SBW-L02 conn-info 是 aria-live=polite；状态不变时不重写 DOM（不重复播报）', async () => {
+  const { ctx, page } = await openBox();
+  assert.equal(await page.$eval(sel('conn-info'), (e) => e.getAttribute('aria-live')), 'polite');
+  assert.equal(await page.$eval(sel('conn-info'), (e) => e.getAttribute('aria-atomic')), null, '不用 aria-atomic，避免整段重读');
+  await page.$eval(sel('conn-info'), (e) => { window.__mut = 0; new MutationObserver((l) => { window.__mut += l.length; }).observe(e, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['aria-live'] }); });
+  await page.click(sel('demo-si-basic'));
+  await waitFor(async () => (await rowCount(page)) === 1, '演示记录');
+  await page.select(sel('set-unit'), 'lb');   // 触发整页重渲染
+  await sleep(300);
+  assert.equal(await page.evaluate(() => window.__mut), 0, '没有连接信息变化时，conn-info 不应被改写');
+  await ctx.close();
+});
+
+test('SBW-L03 删除记录后焦点不丢：落到下一行的删除按钮 / 最后一行 / 「历史记录」标题；清空后同理', async () => {
+  const { ctx, page } = await openBox();
+  page.on('dialog', (d) => d.accept());
+  for (const d of ['demo-si-full', 'demo-body-composition', 'demo-imperial']) {
+    const n = await rowCount(page);
+    await page.click(sel(d));
+    await waitFor(async () => (await rowCount(page)) > n, d);
+  }
+  const ids = () => page.$$eval(sel('history-row'), (r) => r.map((x) => x.dataset.id));
+  const active = () => page.evaluate(() => ({ id: document.activeElement?.id, tag: document.activeElement?.tagName, rowId: document.activeElement?.closest?.('tr')?.dataset.id, testid: document.activeElement?.dataset?.testid }));
+  const rows = await ids();
+  assert.equal(rows.length, 3);
+  // 删中间一行：焦点在原位置（现在是原来的第 3 行）的删除按钮上
+  await page.click(`${sel('history-row')}[data-id="${rows[1]}"] ${sel('history-delete')}`);
+  await waitFor(async () => (await rowCount(page)) === 2, '删除后 2 行');
+  let a = await active();
+  assert.deepEqual([a.tag, a.testid, a.rowId], ['BUTTON', 'history-delete', rows[2]], '焦点应在下一行的删除按钮：' + JSON.stringify(a));
+  // 删最后一行：焦点到新的最后一行
+  await page.click(`${sel('history-row')}[data-id="${rows[2]}"] ${sel('history-delete')}`);
+  await waitFor(async () => (await rowCount(page)) === 1, '删除后 1 行');
+  a = await active();
+  assert.deepEqual([a.tag, a.testid, a.rowId], ['BUTTON', 'history-delete', rows[0]], '焦点应在剩下那行的删除按钮：' + JSON.stringify(a));
+  // 删光：焦点到「历史记录」标题（可聚焦，tabindex=-1）
+  await page.click(`${sel('history-row')} ${sel('history-delete')}`);
+  await waitFor(async () => (await rowCount(page)) === 0, '删光');
+  a = await active();
+  assert.equal(a.id, 'history-h', '没有行时焦点到标题：' + JSON.stringify(a));
+  assert.equal(await page.$eval(sel('history-h'), (e) => e.getAttribute('tabindex')), '-1', '标题不进 Tab 顺序');
+  // 「清空全部」：按钮被禁用后焦点不能留在它上面或 <body>
+  await page.click(sel('demo-si-full'));
+  await waitFor(async () => (await rowCount(page)) === 1, '一条');
+  await page.focus(sel('btn-clear-all'));
+  await page.keyboard.press('Enter');
+  await waitFor(async () => (await rowCount(page)) === 0, '清空');
+  a = await active();
+  assert.equal(a.id, 'history-h', '清空后焦点：' + JSON.stringify(a));
+  // 「清除演示数据」同理
+  await page.click(sel('demo-si-full'));
+  await waitFor(async () => (await rowCount(page)) === 1, '一条');
+  await page.focus(sel('btn-clear-demo'));
+  await page.keyboard.press('Enter');
+  await waitFor(async () => (await rowCount(page)) === 0, '清演示');
+  a = await active();
+  assert.equal(a.id, 'history-h', '清演示数据后焦点：' + JSON.stringify(a));
+  await ctx.close();
+});
+
+test('SBW-L04 切换语言：已经生成的状态消息（导出/导入/备注/调试）跟着变，不停留在旧语言', async () => {
+  const { ctx, page } = await openBox();
+  const cjk = /[\u4e00-\u9fff]/;
+  await page.click(sel('demo-si-full'));
+  await waitFor(async () => (await rowCount(page)) === 1, '演示记录');
+  await page.click(sel('btn-export-csv'));
+  await waitFor(async () => (await text(page, 'export-msg')).length > 0, '导出提示');
+  await page.$eval(sel('note-id'), (e) => { e.value = '999'; });
+  await page.click(sel('btn-note-save'));
+  await waitFor(async () => (await text(page, 'note-msg')).length > 0, '备注提示');
+  await page.$eval(sel('debug') + ' details', (d) => { d.open = true; });
+  await page.$eval(sel('dbg-hex'), (e) => { e.value = 'zz'; });
+  await page.click(sel('btn-dbg-parse'));
+  await waitFor(async () => (await text(page, 'dbg-out')).length > 0, '调试输出');
+  await page.$eval(sel('import-text'), (e) => { e.value = '{"x":1}'; });
+  await page.click(sel('btn-import'));
+  await waitFor(async () => (await text(page, 'import-result')).length > 0, '导入提示');
+  const ids = ['export-msg', 'note-msg', 'dbg-out', 'import-result'];
+  const zhTexts = {};
+  for (const id of ids) { zhTexts[id] = await text(page, id); assert.match(zhTexts[id], cjk, `${id} 起始应是中文：${zhTexts[id]}`); }
+
+  await page.select(sel('lang-select'), 'en');
+  await waitFor(async () => /History/i.test(await text(page, 'history-h')), '切到英文');
+  const enTexts = {};
+  for (const id of ids) {
+    enTexts[id] = await text(page, id);
+    assert.ok(enTexts[id].length > 0, `${id} 切换语言后不应被清空`);
+    assert.doesNotMatch(enTexts[id], cjk, `${id} 切到英文后仍有中文：${enTexts[id]}`);
+    assert.notEqual(enTexts[id], zhTexts[id]);
+  }
+  // 英文里带参数的消息参数值保持不变（文件名、行数等）
+  assert.match(enTexts['export-msg'], /\.csv/);
+
+  await page.select(sel('lang-select'), 'zh');
+  await waitFor(async () => /历史/.test(await text(page, 'history-h')), '切回中文');
+  for (const id of ids) assert.equal(await text(page, id), zhTexts[id], `${id} 切回中文后应还原`);
   await ctx.close();
 });

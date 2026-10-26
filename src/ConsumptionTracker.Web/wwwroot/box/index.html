@@ -6,8 +6,8 @@
 <meta name="referrer" content="no-referrer">
 <title data-i18n="app.title">ScaleBridge Web</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="/box/style.6729932a6d.css">
-<script type="module" src="/box/main.52c8f74819.js"></script>
+<link rel="stylesheet" href="/box/style.1b7e7c9dec.css">
+<script type="module" src="/box/main.6932a3799d.js"></script>
 </head>
 <body>
 <a class="skip" href="#main" data-i18n="a11y.skip">跳到主要内容</a>
@@ -48,7 +48,7 @@
       <strong data-i18n="connect.status"></strong>: <span id="conn-state" data-testid="conn-state" role="status" aria-live="polite"></span>
       <span id="conn-device" data-testid="conn-device"></span>
     </p>
-    <p id="conn-info" data-testid="conn-info" class="muted"></p>
+    <p id="conn-info" data-testid="conn-info" class="muted" aria-live="polite"></p>
     <p id="conn-error" data-testid="conn-error" class="error" role="alert"></p>
   </section>
 
@@ -64,7 +64,7 @@
   </section>
 
   <section id="history" data-testid="history" aria-labelledby="history-h" class="card">
-    <h2 id="history-h" data-testid="history-h" data-i18n="history.heading"></h2>
+    <h2 id="history-h" data-testid="history-h" tabindex="-1" data-i18n="history.heading"></h2>
     <p id="history-count" data-testid="history-count" class="muted"></p>
     <p id="store-warning" data-testid="store-warning" class="error" role="alert" hidden></p>
     <div class="table-wrap">

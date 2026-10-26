@@ -1,5 +1,5 @@
 // 隐私页：只负责语言（读取首页保存在 IndexedDB 里的语言偏好）。
-import { applyDom, makeT, resolveLang } from './i18n/index.430b69b1ad.js';
+import { applyDom, makeT, resolveLang } from './i18n/index.3841b75def.js';
 import { openStore } from './core/store.f1047b4f3e.js';
 
 const sel = document.getElementById('lang-select');

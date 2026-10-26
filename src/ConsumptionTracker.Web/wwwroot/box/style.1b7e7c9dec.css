@@ -21,9 +21,10 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 1rem/1.55 syste
 .top h1 { margin: 0 0 .25rem; font-size: 1.6rem; }
 .top p { margin: .25rem 0; }
 .top-tools { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
-main { max-width: 62rem; margin: 0 auto; padding: 0 1rem 2rem; display: grid; gap: 1rem; }
+/* 单列 grid 的列默认是 auto（min-content 为下限）：文件选择框、长 <select> 的固有宽度会把整列撑过窄屏视口（SBW-M01）。 */
+main { max-width: 62rem; margin: 0 auto; padding: 0 1rem 2rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
 main:focus { outline: none; }
-.card { background: var(--card); border: 1px solid var(--line); border-radius: .6rem; padding: 1rem; }
+.card { min-width: 0; background: var(--card); border: 1px solid var(--line); border-radius: .6rem; padding: 1rem; overflow-wrap: anywhere; }
 main.card { max-width: 62rem; margin: 0 auto 1rem; }
 .card h2 { margin: 0 0 .5rem; font-size: 1.2rem; }
 .card h3 { margin: 1rem 0 .25rem; font-size: 1.05rem; }
@@ -41,13 +42,15 @@ button.primary { background: var(--accent); color: var(--accent-fg); border-colo
 button.danger { color: var(--danger); border-color: var(--danger); }
 button:disabled { opacity: .55; cursor: not-allowed; }
 textarea { width: 100%; font-family: ui-monospace, Menlo, Consolas, monospace; }
+input[type=file], select, input:not([type=checkbox]), textarea { max-width: 100%; }
+input[type=file] { min-width: 0; }
 :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
-.table-wrap { overflow-x: auto; }
+.table-wrap { overflow-x: auto; overflow-wrap: normal; } /* 表格在自己的容器里横向滚动，不拆词 */
 table { border-collapse: collapse; width: 100%; font-size: .95rem; }
 th, td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
 td.demo-row-tag, .tag-demo { color: var(--demo-fg); background: var(--demo-bg); font-weight: 600; border-radius: .3rem; padding: 0 .3rem; }
 .tag-warn { color: var(--warn-fg); background: var(--warn-bg); font-weight: 600; border-radius: .3rem; padding: 0 .3rem; }
-dl.fields { display: grid; grid-template-columns: max-content 1fr; gap: .15rem 1rem; margin: .5rem 0 0; }
+dl.fields { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .15rem 1rem; margin: .5rem 0 0; }
 dl.fields dt { color: var(--muted); }
 dl.fields dd { margin: 0; }
 .big { font-size: 2rem; font-weight: 700; margin: 0; }
