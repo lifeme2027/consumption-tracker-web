@@ -112,3 +112,11 @@
 - 服务器只保留不需要明文的字段（日期、金额用于统计的取舍需要评估——若要彻底隐藏，则统计改为客户端计算）。
 - 代价：服务端无法搜索 / 统计 / 导出明文，需要把这些逻辑搬到前端；密钥丢失 = 数据不可恢复，需要导出 / 备份与恢复流程。
 - 前置：确认 KasWare 签名是否确定性（Schnorr BIP340 带随机辅助数据时不确定，需要改用固定派生方案）。
+
+## `/box`（ScaleBridge Web 版）集成备忘
+
+- 集成方式：scalebridge `web/` 构建产物复制到 `wwwroot/box/`（提交进本仓库），`UseBoxRewrite` 把 `/box` 内部改写为 `/box/index.html`（先于 `UseDefaultFiles`，否则会 301 到 `/box/`），`UseStaticFiles` 的 `OnPrepareResponse` 只对 `/box` 设缓存头。`Security.cs` 在 `OnStarting` 里按 `BoxSite.IsBoxPath`（按路径段匹配：`/boxer`、`/xbox` 不算）切换 CSP 与 Permissions-Policy，其它路径沿用原来的值。
+- 约束：`/box` 页面不得有内联脚本/样式、不得用 Worker、不得发任何网络请求（`BoxSiteTests` 有静态检查）；需要 Worker 时只能给 `/box` 单独加 `worker-src 'self'`。
+- 已知限制：Web Bluetooth 仅 Chromium 系；不支持的浏览器给友好提示 + 演示模式 + CSV/JSON 导入导出；厂商私有广播协议暂未支持；蓝牙路径未真机验证。
+- 测试里 `TestClock` 现在从真实当前时间起算：原先写死的起点会让 12 小时有效的会话 Cookie 在真实时钟下过期，导致 `AuthTests` 在起点日期之后必然失败。
+- `scripts/e2e/ui.test.js` 里原先写死的日期（`2026-10-25`）改成取当天本地日期，否则「同日重复登记提醒」的用例过了那一天就失败。

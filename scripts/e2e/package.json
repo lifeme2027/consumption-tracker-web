@@ -1,7 +1,11 @@
 {
   "name": "life-web-e2e",
   "private": true,
-  "description": "真浏览器（headless Chrome）UI 回归：本地模式与云端开发登录模式各走一遍 登记→列表→编辑→删除→撤销。CI 里 npm ci && npm test",
-  "scripts": { "test": "node --test --test-timeout=240000 ui.test.js" },
-  "devDependencies": { "puppeteer-core": "^24.43.1" }
+  "description": "真浏览器（headless Chrome）UI 回归：本地模式与云端开发登录模式各走一遍 登记→列表→编辑→删除→撤销。CI 里 npm ci && npm test；box.test.js 覆盖 /box（ScaleBridge Web 版）",
+  "scripts": {
+    "test": "node --test --test-timeout=240000 ui.test.js box.test.js"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^24.43.1"
+  }
 }

@@ -143,3 +143,17 @@ CatalogConverter 商品库.xlsx catalog.db
 - 日志：默认只记 Warning 以上，且**不含记录内容**。排错需要标准输出日志时可临时把 `web.config` 里 `stdoutLogEnabled` 改为 `true` 并创建 `logs` 目录，排完请改回 `false`。
 - 数据导出：用户可自行在“数据”页导出；服务器侧备份请定期复制 `App_Data`。
 - 数据库文件包含用户明文记录（用药名称、用药人、剂量等属健康敏感信息），请限制服务器上对 `App_Data` 与备份目录的访问，建议启用磁盘加密（BitLocker），并定期备份到受控位置；备份和日志由管理员手动清理（见上节“备份与日志”）。
+
+## `/box`：ScaleBridge Web 版（静态子路径，随本站一起发布）
+
+- 内容是 [composehk/scalebridge](https://github.com/composehk/scalebridge) 的 `web/`（纯静态：ES 模块、零运行时依赖、无后端接口），已构建并**提交**在 `src/ConsumptionTracker.Web/wwwroot/box/`，随 `dotnet publish` 一起进发布包。**没有新服务、没有计划任务，也不动数据目录。**
+- `/box` 与 `/box/` 都打开首页；其它文件在 `/box/…` 下。`/box` 下的响应由 `Api/BoxSite.cs` 与 `Api/Security.cs` 处理：
+  - `Content-Security-Policy`：`default-src 'self'; script-src 'self'; connect-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`；
+  - `Permissions-Policy`：`bluetooth=(self), camera=(), microphone=(), geolocation=(), payment=(), usb=()`（仅 `/box` 开 `bluetooth`；站点其它路径的响应头不变）；
+  - 首页等无哈希文件 `no-cache`；带内容哈希的 `*.<10位十六进制>.js|css` 为 `public, max-age=31536000, immutable`；不设 Cookie。
+- Web Bluetooth 只在 Chromium 系浏览器、HTTPS（或 localhost）下可用。IIS 上站点本来就是 HTTPS，无需额外配置；`web.config` 不用改。
+- 更新 `/box` 内容：在 scalebridge 仓库 `web/` 里改完并推送后，在那边执行 `node web/scripts/sync-to-site.mjs <本仓库路径>`（`--check` 只校验不写），再提交这里的 `wwwroot/box/` 变更。同步脚本会删掉旧的哈希文件。
+- 隐私：`/box` 的数据只在访问者浏览器的 IndexedDB 里，不上传；站点访问日志只会有 `/box/…` 静态文件的 GET 记录，**不含任何体重数据**（页面不向服务器发任何数据）。
+- 蓝牙连接路径为实验性（仅按规范实现，未真机验证）；页面上的示例记录均标「演示数据」。
+
+回归：`dotnet test`（含 `BoxSiteTests`：响应头、其它路径不变、`/box` 与 `/box/`、路径穿越、静态约束）；`scripts/e2e` 的 `box.test.js`（真浏览器；Chrome 需带 `--enable-features=WebBluetooth`，否则 Linux 版 Chrome 没有 `navigator.bluetooth`，控制台会对 `Permissions-Policy` 里的 `bluetooth` 给出一条“Unrecognized feature”的浏览器提示，与站点无关）。

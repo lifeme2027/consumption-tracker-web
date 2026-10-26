@@ -1,12 +1,12 @@
 {
   "name": "scalebridge-web",
   "version": "0.1.0",
-  "commit": "4c77b6698827",
+  "commit": "44516783c832",
   "source": "https://github.com/composehk/scalebridge/tree/main/web",
   "files": [
     {
-      "path": "build-info.e6fb49471e.js",
-      "sha256": "e6fb49471eb67ad64c8974a0ed1be96cc5dceb120b12e9bb14bf859daa748d91",
+      "path": "build-info.fa43167ebb.js",
+      "sha256": "fa43167ebb144a2ba0bc664457a1657c117d60413efbf260135ce20ecd62cda2",
       "bytes": 82
     },
     {
@@ -91,13 +91,13 @@
     },
     {
       "path": "index.html",
-      "sha256": "32582afd7a0c1ad14912ec555349d02cd50644aabde289ff50e8c58f2334b84c",
+      "sha256": "02b3acf6974007550003dc6241411505e50b1ac0748669a21e6d0c6aee56b7a5",
       "bytes": 8599
     },
     {
-      "path": "main.ee6748b625.js",
-      "sha256": "ee6748b6251dd6992b00d555c5d4feb66e219987dad512ac67bcd9c432d87570",
-      "bytes": 18510
+      "path": "main.52c8f74819.js",
+      "sha256": "52c8f7481911a4d471923b303c142e56dfbeeead836d9132a49dc485abc38d0d",
+      "bytes": 18616
     },
     {
       "path": "privacy.f9b0ccde2a.js",

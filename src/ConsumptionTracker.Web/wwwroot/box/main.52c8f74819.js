@@ -13,7 +13,7 @@ import { parseHex } from './core/bytes.ae517095e7.js';
 import { parseCharacteristic } from './core/protocol.19124bbe03.js';
 import { detailRows, tagFor, timeText, weightText } from './core/view.19f30d22f8.js';
 import { decideIngest, isAbnormal, isDeviceClockSuspect } from './core/policy.bc3a5a457f.js';
-import { BUILD } from './build-info.e6fb49471e.js';
+import { BUILD } from './build-info.fa43167ebb.js';
 
 const $ = (id) => document.getElementById(id);
 const MAX_ROWS = 300;
@@ -53,6 +53,7 @@ function renderSupport() {
   const { t, support: s } = S;
   const level = supportLevel(s, S.availability);
   $('support-msg').textContent = t(`support.${level}`);
+  $('support-msg').dataset.level = level; // ok | noApi | insecure | noAdapter，供自动化测试读取
   const yn = (b) => t(b ? 'support.yes' : 'support.no');
   const avail = S.availability === null ? t('support.unknown') : t(`support.avail.${S.availability}`);
   const list = $('support-detail');
