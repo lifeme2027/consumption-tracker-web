@@ -13,6 +13,8 @@ const puppeteer = require('puppeteer-core');
 const ROOT = path.join(__dirname, '..', '..');
 const DLL = path.join(ROOT, 'src', 'ConsumptionTracker.Web', 'bin', 'Release', 'net8.0', 'ConsumptionTrackerWeb.dll');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// 表单里「今天」的本地日期。用例要保证「同日」，不能写死某一天（写死的日期过了当天，重复登记提醒就不再触发）。
+const TODAY = new Intl.DateTimeFormat('sv-SE').format(new Date());
 
 function chromePath() {
   const c = [process.env.CHROME_PATH, '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser'].filter(Boolean);
@@ -64,7 +66,7 @@ async function waitRows(p, n, what) {
 }
 async function openHistory(p) { await p.click('[data-tab=history]'); await sleep(200); }
 async function fillAndSave(p, { name, price, qty = '1', note = '' }) {
-  await p.$eval('#recForm', (f) => { f.reset(); document.getElementById('fDate').value = '2026-10-25'; });
+  await p.$eval('#recForm', (f, d) => { f.reset(); document.getElementById('fDate').value = d; }, TODAY);
   await p.type('#fName', name); await p.type('#fPrice', price);
   await p.$eval('#fQty', (e) => { e.value = ''; }); await p.type('#fQty', qty);
   if (note) await p.type('#fNote', note);
@@ -237,7 +239,7 @@ test('M-1 文案：一键删除的提示与确认框如实说明（云端 secure
 
 /** 条码记忆（本地模式）：保存带条码记录 → 重置表单 → 再输入同一条码（回车 / Tab 失焦）→ 名称/分类/单价自动出现、可改、可保存；未知条码保持手动。 */
 async function typeBarcode(p, code, key) {
-  await p.$eval('#recForm', (f) => { f.reset(); document.getElementById('fDate').value = '2026-10-25'; document.getElementById('fQty').value = '1'; });
+  await p.$eval('#recForm', (f, d) => { f.reset(); document.getElementById('fDate').value = d; document.getElementById('fQty').value = '1'; }, TODAY);
   await p.evaluate(() => document.getElementById('clearBtn').click());   // 真正走「重置」按钮（会清 lastLookedCode）
   await p.click('#fBarcode'); await p.type('#fBarcode', code); await p.keyboard.press(key);
   await sleep(300);
@@ -253,7 +255,7 @@ test('条码记忆（本地模式）：保存后再扫同一条码，回车 / Ta
   assert.strictEqual(await val(p, '#fName'), '', '未命中不应自动填名称');
   await p.type('#fName', '记忆咖啡'); await p.type('#fPrice', '3.5');
   await p.select('#fCategory', '食品');
-  await p.$eval('#fDate', (e) => { e.value = '2026-10-25'; });
+  await p.$eval('#fDate', (e, d) => { e.value = d; }, TODAY);
   await p.click('#saveBtn');
   for (let i = 0; i < 30 && !/已保存/.test(await text(p, '#formMsg')); i++) await sleep(100);
   assert.match(await text(p, '#formMsg'), /已保存/);
@@ -311,7 +313,7 @@ test('商品库查询（本地模式）：命中带出名称、分类、参考�
   // 可改并保存（改名称与单价）→ 成为本机记忆
   await p.$eval('#fName', (e) => { e.value = ''; }); await p.type('#fName', '合成饮料(改)');
   await p.$eval('#fPrice', (e) => { e.value = ''; }); await p.type('#fPrice', '5');
-  await p.$eval('#fDate', (e) => { e.value = '2026-10-25'; });
+  await p.$eval('#fDate', (e, d) => { e.value = d; }, TODAY);
   await p.click('#saveBtn');
   for (let i = 0; i < 30 && !/已保存/.test(await text(p, '#formMsg')); i++) await sleep(100);
   assert.match(await text(p, '#formMsg'), /已保存/);
