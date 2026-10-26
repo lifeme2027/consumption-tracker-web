@@ -49,6 +49,9 @@ jobs:
           test -f publish/life/ConsumptionTrackerWeb.exe
           test -f publish/life/wwwroot/index.html
           test -f publish/life/wwwroot/vendor/html5-qrcode.min.js
+          test -f publish/life/wwwroot/box/index.html
+          test -f publish/life/wwwroot/box/privacy.html
+          ls publish/life/wwwroot/box/main.*.js publish/life/wwwroot/box/style.*.css
           test ! -e publish/life/App_Data
           test ! -e publish/life/appsettings.Production.json
           find publish/life -name '*.db*' | grep -q . && exit 1 || true
