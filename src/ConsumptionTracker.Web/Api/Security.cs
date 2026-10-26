@@ -20,11 +20,12 @@ public static class Security
             ctx.Response.OnStarting(() =>
             {
                 var h = ctx.Response.Headers;
-                h["Content-Security-Policy"] = Csp;
+                var box = BoxSite.IsBoxPath(ctx.Request.Path); // /box 是独立的静态页（Web Bluetooth），只有它有自己的 CSP 与 Permissions-Policy
+                h["Content-Security-Policy"] = box ? BoxSite.Csp : Csp;
                 h["X-Content-Type-Options"] = "nosniff";
                 h["X-Frame-Options"] = "DENY";
                 h["Referrer-Policy"] = "no-referrer";
-                h["Permissions-Policy"] = "camera=(self), microphone=(), geolocation=(), payment=(), usb=()";
+                h["Permissions-Policy"] = box ? BoxSite.PermissionsPolicy : "camera=(self), microphone=(), geolocation=(), payment=(), usb=()";
                 h["Cross-Origin-Opener-Policy"] = "same-origin";
                 h["Cross-Origin-Resource-Policy"] = "same-origin";
                 if (ctx.Request.IsHttps) h["Strict-Transport-Security"] = "max-age=31536000";

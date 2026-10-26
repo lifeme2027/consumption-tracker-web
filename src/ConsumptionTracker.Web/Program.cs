@@ -76,8 +76,9 @@ if (!app.Environment.IsDevelopment())
 app.UseApiStatusBodies();
 app.UseRateLimiter();
 app.UseApiGuards(options);
+app.UseBoxRewrite();
 app.UseDefaultFiles();
-app.UseStaticFiles();
+app.UseStaticFiles(new StaticFileOptions { OnPrepareResponse = BoxSite.PrepareResponse });
 
 app.MapGet("/healthz", () => Results.Text("ok"));
 app.MapLifeApi(options);

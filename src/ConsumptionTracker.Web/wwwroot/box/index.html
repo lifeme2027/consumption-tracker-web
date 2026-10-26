@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title data-i18n="app.title">ScaleBridge Web</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/box/style.6729932a6d.css">
+<script type="module" src="/box/main.ee6748b625.js"></script>
+</head>
+<body>
+<a class="skip" href="#main" data-i18n="a11y.skip">跳到主要内容</a>
+<header class="top">
+  <div>
+    <h1 data-i18n="app.title">ScaleBridge Web</h1>
+    <p class="sub" data-i18n="app.subtitle"></p>
+    <p><span class="badge exp" data-i18n="exp.label"></span></p>
+  </div>
+  <div class="top-tools">
+    <label for="lang-select" data-i18n="lang.label"></label>
+    <select id="lang-select" data-testid="lang-select">
+      <option value="auto" data-i18n="lang.auto"></option>
+      <option value="zh">中文</option>
+      <option value="en">English</option>
+    </select>
+    <a href="/box/privacy.html" data-i18n="nav.privacy"></a>
+  </div>
+</header>
+
+<main id="main" data-testid="main" tabindex="-1">
+  <section id="support" data-testid="support" aria-labelledby="support-h" class="card">
+    <h2 id="support-h" data-testid="support-h" data-i18n="support.heading"></h2>
+    <p id="support-msg" data-testid="support-msg" role="status"></p>
+    <ul id="support-detail" data-testid="support-detail" class="plain"></ul>
+  </section>
+
+  <section id="connect" data-testid="connect" aria-labelledby="connect-h" class="card">
+    <h2 id="connect-h" data-testid="connect-h"><span data-i18n="connect.heading"></span> <span class="badge exp" data-i18n="exp.short"></span></h2>
+    <p class="muted" data-i18n="connect.intro"></p>
+    <p>
+      <button type="button" id="btn-connect" data-testid="btn-connect" class="primary" data-i18n="connect.button"></button>
+      <button type="button" id="btn-reconnect" data-testid="btn-reconnect" hidden data-i18n="connect.reconnect"></button>
+      <button type="button" id="btn-disconnect" data-testid="btn-disconnect" hidden data-i18n="connect.disconnect"></button>
+    </p>
+    <p><label><input type="checkbox" id="chk-all" data-testid="chk-all"> <span data-i18n="connect.acceptAll"></span></label></p>
+    <p>
+      <strong data-i18n="connect.status"></strong>: <span id="conn-state" data-testid="conn-state" role="status" aria-live="polite"></span>
+      <span id="conn-device" data-testid="conn-device"></span>
+    </p>
+    <p id="conn-info" data-testid="conn-info" class="muted"></p>
+    <p id="conn-error" data-testid="conn-error" class="error" role="alert"></p>
+  </section>
+
+  <section id="demo" data-testid="demo" aria-labelledby="demo-h" class="card demo">
+    <h2 id="demo-h" data-testid="demo-h"><span data-i18n="demo.heading"></span> <span class="badge demo-badge" data-i18n="demo.tag"></span></h2>
+    <p data-i18n="demo.intro"></p>
+    <p id="demo-buttons" data-testid="demo-buttons" class="row"></p>
+  </section>
+
+  <section id="latest" data-testid="latest" aria-labelledby="latest-h" class="card">
+    <h2 id="latest-h" data-testid="latest-h" data-i18n="latest.heading"></h2>
+    <div id="latest-body" data-testid="latest-body" aria-live="polite"></div>
+  </section>
+
+  <section id="history" data-testid="history" aria-labelledby="history-h" class="card">
+    <h2 id="history-h" data-testid="history-h" data-i18n="history.heading"></h2>
+    <p id="history-count" data-testid="history-count" class="muted"></p>
+    <p id="store-warning" data-testid="store-warning" class="error" role="alert" hidden></p>
+    <div class="table-wrap">
+      <table id="history-table" data-testid="history-table">
+        <caption class="sr-only" data-i18n="history.caption"></caption>
+        <thead><tr>
+          <th scope="col" data-i18n="history.col.time"></th>
+          <th scope="col" data-i18n="history.col.weight"></th>
+          <th scope="col" data-i18n="history.col.bmi"></th>
+          <th scope="col" data-i18n="history.col.fat"></th>
+          <th scope="col" data-i18n="history.col.source"></th>
+          <th scope="col" data-i18n="history.col.actions"></th>
+        </tr></thead>
+        <tbody id="history-rows" data-testid="history-rows"></tbody>
+      </table>
+    </div>
+    <p id="history-empty" data-testid="history-empty" class="muted" data-i18n="history.empty"></p>
+    <p>
+      <button type="button" id="btn-clear-demo" data-testid="btn-clear-demo" data-i18n="history.clearDemo"></button>
+      <button type="button" id="btn-clear-all" data-testid="btn-clear-all" class="danger" data-i18n="history.clearAll"></button>
+    </p>
+  </section>
+
+  <section id="io" data-testid="io" aria-labelledby="io-h" class="card">
+    <h2 id="io-h" data-testid="io-h" data-i18n="io.heading"></h2>
+    <p class="muted" data-i18n="io.intro"></p>
+    <p>
+      <button type="button" id="btn-export-csv" data-testid="btn-export-csv" data-i18n="io.exportCsv"></button>
+      <button type="button" id="btn-export-json" data-testid="btn-export-json" data-i18n="io.exportJson"></button>
+    </p>
+    <p id="export-msg" data-testid="export-msg" role="status"></p>
+    <h3 data-i18n="io.importHeading"></h3>
+    <p><label for="import-file" data-i18n="io.importFile"></label><br>
+      <input type="file" id="import-file" data-testid="import-file" accept=".csv,.json,text/csv,application/json"></p>
+    <p><label for="import-text" data-i18n="io.importPaste"></label><br>
+      <textarea id="import-text" data-testid="import-text" rows="5" spellcheck="false" autocomplete="off"></textarea></p>
+    <p><button type="button" id="btn-import" data-testid="btn-import" data-i18n="io.importButton"></button></p>
+    <div id="import-result" data-testid="import-result" role="status"></div>
+  </section>
+
+  <section id="settings" data-testid="settings" aria-labelledby="settings-h" class="card">
+    <h2 id="settings-h" data-testid="settings-h" data-i18n="settings.heading"></h2>
+    <p><label for="set-unit" data-i18n="settings.unit"></label>
+      <select id="set-unit" data-testid="set-unit">
+        <option value="kg">kg</option>
+        <option value="lb">lb</option>
+      </select></p>
+    <h3 data-i18n="settings.notesHeading"></h3>
+    <p class="muted" data-i18n="settings.notesHelp"></p>
+    <p class="row">
+      <label for="note-id" data-i18n="settings.noteId"></label>
+      <input type="number" id="note-id" data-testid="note-id" min="0" max="254" step="1" inputmode="numeric">
+      <label for="note-text" data-i18n="settings.noteText"></label>
+      <input type="text" id="note-text" data-testid="note-text" maxlength="40" autocomplete="off">
+      <button type="button" id="btn-note-save" data-testid="btn-note-save" data-i18n="settings.noteSave"></button>
+    </p>
+    <p id="note-msg" data-testid="note-msg" role="status"></p>
+    <ul id="note-list" data-testid="note-list" class="plain"></ul>
+  </section>
+
+  <section id="debug" data-testid="debug" class="card">
+    <details>
+      <summary data-i18n="debug.summary"></summary>
+      <p class="muted" data-i18n="debug.intro"></p>
+      <p><label for="dbg-char" data-i18n="debug.char"></label>
+        <select id="dbg-char" data-testid="dbg-char">
+          <option value="181D:2A9D">0x181D / 0x2A9D Weight Measurement</option>
+          <option value="181D:2A9E">0x181D / 0x2A9E Weight Scale Feature</option>
+          <option value="181B:2A9C">0x181B / 0x2A9C Body Composition Measurement</option>
+          <option value="181B:2A9B">0x181B / 0x2A9B Body Composition Feature</option>
+        </select></p>
+      <p><label for="dbg-hex" data-i18n="debug.hex"></label><br>
+        <textarea id="dbg-hex" data-testid="dbg-hex" rows="2" spellcheck="false" autocomplete="off" placeholder="00 B0 36"></textarea></p>
+      <p><button type="button" id="btn-dbg-parse" data-testid="btn-dbg-parse" data-i18n="debug.parse"></button>
+         <button type="button" id="btn-dbg-save" data-testid="btn-dbg-save" data-i18n="debug.save"></button></p>
+      <pre id="dbg-out" data-testid="dbg-out" role="status" tabindex="0"></pre>
+    </details>
+  </section>
+
+  <section id="limits" data-testid="limits" aria-labelledby="limits-h" class="card">
+    <h2 id="limits-h" data-testid="limits-h" data-i18n="limits.heading"></h2>
+    <ul id="limits-list" data-testid="limits-list"></ul>
+  </section>
+</main>
+
+<footer class="foot">
+  <a href="/box/privacy.html" data-i18n="nav.privacy"></a>
+  <span aria-hidden="true">·</span>
+  <span data-i18n="foot.license"></span>
+  <span aria-hidden="true">·</span>
+  <span data-i18n="foot.build"></span> <span id="build-info" data-testid="build-info"></span>
+</footer>
+</body>
+</html>

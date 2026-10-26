@@ -1,0 +1,118 @@
+{
+  "name": "scalebridge-web",
+  "version": "0.1.0",
+  "commit": "4c77b6698827",
+  "source": "https://github.com/composehk/scalebridge/tree/main/web",
+  "files": [
+    {
+      "path": "build-info.e6fb49471e.js",
+      "sha256": "e6fb49471eb67ad64c8974a0ed1be96cc5dceb120b12e9bb14bf859daa748d91",
+      "bytes": 82
+    },
+    {
+      "path": "core/ble.62cdfcf5ad.js",
+      "sha256": "62cdfcf5adc2c83a7a621ec2315eb68762851a9d838369a9933c885c26a4b0f4",
+      "bytes": 12070
+    },
+    {
+      "path": "core/bytes.ae517095e7.js",
+      "sha256": "ae517095e730e281bba22069879e291bd2a5ffdaf2be37e489bd42b6802096d6",
+      "bytes": 1947
+    },
+    {
+      "path": "core/decimal.d1b6f6c095.js",
+      "sha256": "d1b6f6c095554d1fac654335eda3c6e7afcadaae1beba541f52794032368ade8",
+      "bytes": 3943
+    },
+    {
+      "path": "core/detect.19b52f9393.js",
+      "sha256": "19b52f9393c671634cfa9898ee83ec720277cc87fea58a3abadadc0a25a10180",
+      "bytes": 1997
+    },
+    {
+      "path": "core/export.d16d97726f.js",
+      "sha256": "d16d97726fbc5e7727ed08373e24eade776641d9e1c9209f0c689b3afa9b0863",
+      "bytes": 4094
+    },
+    {
+      "path": "core/fake.0c2e641913.js",
+      "sha256": "0c2e641913870a64ae2ba71087f069a1573f51114ee5dc0da235d59c4dd8cfe3",
+      "bytes": 2080
+    },
+    {
+      "path": "core/import.d285109adc.js",
+      "sha256": "d285109adc14a341ce4ebbdc3e2da25e475a2e1536ca6e4db7e4e932bd1e8c36",
+      "bytes": 14537
+    },
+    {
+      "path": "core/measurement.0911573984.js",
+      "sha256": "091157398482c8216ae0dfb0a079b54ef0c39d665628a020b98cde0f9406392e",
+      "bytes": 5197
+    },
+    {
+      "path": "core/pipeline.add5d7a784.js",
+      "sha256": "add5d7a784e8e1044d798f354cd90557b49a29f0ecf8f0c17f5a38d7e12c1fa4",
+      "bytes": 1458
+    },
+    {
+      "path": "core/policy.bc3a5a457f.js",
+      "sha256": "bc3a5a457f409c3a8318d6952e9163d40ff901073f1e4d6a6b99fe365318541d",
+      "bytes": 2910
+    },
+    {
+      "path": "core/protocol.19124bbe03.js",
+      "sha256": "19124bbe030b4ec353b942c180186b66d1d2a81d41c830d5b6598bc0f2aa0736",
+      "bytes": 11752
+    },
+    {
+      "path": "core/store.f1047b4f3e.js",
+      "sha256": "f1047b4f3e7d6aedbbdddfefa82f231b475f0174c30eb38fee1b081b0b2bf7c6",
+      "bytes": 5901
+    },
+    {
+      "path": "core/view.19f30d22f8.js",
+      "sha256": "19f30d22f87cf3f7495ef2a02befb6d5055ba879a873b01e0cdaca9e8dba0b63",
+      "bytes": 2568
+    },
+    {
+      "path": "i18n/en.ca7d92e442.js",
+      "sha256": "ca7d92e4425ec6ee77471bbbfb428171f4ed8bf12fb993bb0bb82f8bcf079f58",
+      "bytes": 16000
+    },
+    {
+      "path": "i18n/index.430b69b1ad.js",
+      "sha256": "430b69b1adb8688356a837cdd4538b2f3a72916007befa46ad436d95749bc94a",
+      "bytes": 1611
+    },
+    {
+      "path": "i18n/zh.35af188bb4.js",
+      "sha256": "35af188bb4198de07c6e6e7158f0331b06619dab8ecca1c23ad720a40e2175f9",
+      "bytes": 15308
+    },
+    {
+      "path": "index.html",
+      "sha256": "32582afd7a0c1ad14912ec555349d02cd50644aabde289ff50e8c58f2334b84c",
+      "bytes": 8599
+    },
+    {
+      "path": "main.ee6748b625.js",
+      "sha256": "ee6748b6251dd6992b00d555c5d4feb66e219987dad512ac67bcd9c432d87570",
+      "bytes": 18510
+    },
+    {
+      "path": "privacy.f9b0ccde2a.js",
+      "sha256": "f9b0ccde2a800977cd942cdfe821fb6d02103e900da6466f33b8cedbaab2703d",
+      "bytes": 902
+    },
+    {
+      "path": "privacy.html",
+      "sha256": "8b9cfe3279c764821e5a17bac0a64baac85dc695a48d8d544941510178caaccb",
+      "bytes": 1621
+    },
+    {
+      "path": "style.6729932a6d.css",
+      "sha256": "6729932a6d0d2e2c9e7d143eb6d237a471b87c58f84af370eb43b8add1c63c47",
+      "bytes": 4174
+    }
+  ]
+}
