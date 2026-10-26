@@ -15,7 +15,9 @@ namespace ConsumptionTracker.Web.Tests;
 /// <summary>可手动拨动的时钟（测试挑战/会话过期）。</summary>
 public sealed class TestClock : TimeProvider
 {
-    private DateTimeOffset _now = new(2026, 10, 25, 2, 0, 0, TimeSpan.Zero);
+    // 起点取真实当前时间（到秒）：HttpClient 的 CookieContainer 用真实时钟判断 Cookie 是否过期，
+    // 固定在过去的起点会让 12 小时会话 Cookie 在客户端立刻失效（日期一过测试就红）。
+    private DateTimeOffset _now = new(DateTimeOffset.UtcNow.Ticks / TimeSpan.TicksPerSecond * TimeSpan.TicksPerSecond, TimeSpan.Zero);
     public override DateTimeOffset GetUtcNow() => _now;
     public void Advance(TimeSpan t) => _now += t;
 }
