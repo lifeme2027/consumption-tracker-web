@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.StaticFiles;
 namespace ConsumptionTracker.Web.Api;
 
 /// <summary>
-/// /box：ScaleBridge Web 版（纯静态单页，源码在 composehk/scalebridge 的 web/，构建产物同步到 wwwroot/box）。
+/// /box：ScaleBridge Web 版（纯静态单页，源码在 lifeme2027/scalebridge 的 web/，构建产物同步到 wwwroot/box）。
 /// 它需要 Web Bluetooth，所以只对 /box 路径放行 Permissions-Policy 的 bluetooth=(self)，并使用自己的（比全站更小的）CSP；
 /// 站点其它路径的响应头完全不变。/box 页面不调用本站任何接口、不使用 Cookie。
 /// </summary>

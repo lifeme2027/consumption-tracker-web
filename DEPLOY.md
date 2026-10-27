@@ -68,7 +68,7 @@ IIS 下默认环境为 `Production`（不要设置 `ASPNETCORE_ENVIRONMENT=Devel
 CatalogConverter 商品库.xlsx catalog.db
 ```
 
-（源码与用法见桌面版仓库 `composehk/consumption-tracker-desktop` 的 `tools/CatalogConverter/` 和该仓库 README；转换在你自己的电脑上做，xlsx 不需要上传到服务器；Windows 单文件 exe 用该目录下的 `./publish.sh` 生成，Windows 示例：`CatalogConverter.exe "D:\Web\data\商品库240325.xlsx" "D:\Web\data\catalog.db" --verify`，已存在需加 `--overwrite`。）
+（源码与用法见桌面版仓库 `lifeme2027/consumption-tracker-desktop` 的 `tools/CatalogConverter/` 和该仓库 README；转换在你自己的电脑上做，xlsx 不需要上传到服务器；Windows 单文件 exe 用该目录下的 `./publish.sh` 生成，Windows 示例：`CatalogConverter.exe "D:\Web\data\商品库240325.xlsx" "D:\Web\data\catalog.db" --verify`，已存在需加 `--overwrite`。）
 
 1. 把转好的 `catalog.db` 放到 **`D:\Web\data\catalog.db`**。它在站点目录 `D:\Web\life` **之外**，所以升级（覆盖站点目录）不会影响它；要更新商品库，直接替换这个文件即可（每次查询都重新打开文件，不需要重启站点）。
 2. 在 `D:\Web\life\appsettings.Production.json` 里加上（该文件不在发布包内，升级时用 `robocopy ... /XF appsettings.Production.json` 也不会被覆盖）：
@@ -146,7 +146,7 @@ CatalogConverter 商品库.xlsx catalog.db
 
 ## `/box`：ScaleBridge Web 版（静态子路径，随本站一起发布）
 
-- 内容是 [composehk/scalebridge](https://github.com/composehk/scalebridge) 的 `web/`（纯静态：ES 模块、零运行时依赖、无后端接口），已构建并**提交**在 `src/ConsumptionTracker.Web/wwwroot/box/`，随 `dotnet publish` 一起进发布包。**没有新服务、没有计划任务，也不动数据目录。**
+- 内容是 [lifeme2027/scalebridge](https://github.com/lifeme2027/scalebridge) 的 `web/`（纯静态：ES 模块、零运行时依赖、无后端接口），已构建并**提交**在 `src/ConsumptionTracker.Web/wwwroot/box/`，随 `dotnet publish` 一起进发布包。**没有新服务、没有计划任务，也不动数据目录。**
 - `/box` 与 `/box/` 都打开首页；其它文件在 `/box/…` 下。`/box` 下的响应由 `Api/BoxSite.cs` 与 `Api/Security.cs` 处理：
   - `Content-Security-Policy`：`default-src 'self'; script-src 'self'; connect-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`；
   - `Permissions-Policy`：`bluetooth=(self), camera=(), microphone=(), geolocation=(), payment=(), usb=()`（仅 `/box` 开 `bluetooth`；站点其它路径的响应头不变）；
