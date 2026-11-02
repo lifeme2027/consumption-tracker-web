@@ -28,7 +28,11 @@
 4. 成功后下发 **HttpOnly、SameSite=Strict、（生产）Secure** 的短期会话 Cookie（默认 12 小时）；服务器只保存 token 的 SHA-256。
 5. **没有“只输入地址就登录”的后门。** 仅 `Development` 环境且显式 `Life:Auth:DevLogin=true` 时才注册 `/api/auth/dev-login`（默认关闭，生产环境不存在该路由）。
 
-签名/地址代码复用自 `composehk/xiangqi-dotnet`（`Kaspa/KaspaMessageSigner.cs` 等），未重写密码学；用 rusty-kaspa 官方向量和自生成密钥做了单元测试。
+**Built with [NKaspa](https://www.nuget.org/packages/NKaspa/0.1.11-alpha)**（[github.com/lifeme2027/NKaspa](https://github.com/lifeme2027/NKaspa)，0.1.11-alpha）：个人消息哈希、Schnorr 签名与验签由 NKaspa 的 `PersonalMessage` API 完成；`Kaspa/KaspaMessageSigner.cs` 只是薄封装（网络名映射、hex/base64 签名解码、中英文错误提示），不再自带 BLAKE2b / secp256k1 代码。地址解析与校验（`KaspaBech32` / `KaspaAddress`）仍为本项目代码（最初复用自 `composehk/xiangqi-dotnet`）。
+
+未验证事项（如实说明）：
+- 本次迁移只在本地跑了单元/集成测试（含 rusty-kaspa 官方签名向量，512 项全部通过）；**尚未在生产环境用真实 KasWare 钱包重新验证登录**。
+- NKaspa 目前是 alpha 预发布版本，API 与行为在后续版本中可能变化；NKaspa 自身仍依赖 NBitcoin.Secp256k1（传递依赖）。
 
 ## 安全要点
 
@@ -75,3 +79,5 @@ shared-vectors                三端共用向量（money / quantity / limits / c
 ## 许可与第三方
 
 html5-qrcode 2.3.8（Apache-2.0，`wwwroot/vendor/html5-qrcode.LICENSE.txt`），本地提供，不走 CDN。
+
+NKaspa 0.1.11-alpha（NuGet 包，Kaspa 个人消息签名/验签）。

@@ -1,30 +1,28 @@
-using System.Text;
-using NBitcoin.Secp256k1;
+using NK = NKaspa;
+using NKaspa.Crypto;
 
 namespace ConsumptionTracker.Web.Kaspa;
 
 /// <summary>
-/// Kaspa personal-message signing as implemented by rusty-kaspa
-/// (wallet/core/src/message.rs) and used by KasWare's Schnorr signMessage:
-/// digest = BLAKE2b-256(key = "PersonalMessageSigningHash", utf8(message)),
-/// signature = BIP340 Schnorr over that digest with the address's x-only key.
+/// Thin facade over NKaspa's <see cref="NK.PersonalMessage"/> (rusty-kaspa wallet/core/src/message.rs,
+/// as used by KasWare's Schnorr signMessage). Crypto is delegated to NKaspa 0.1.11-alpha; this class keeps
+/// the app's network-name mapping, signature-encoding quirks and friendly error messages.
 /// </summary>
 public static class KaspaMessageSigner
 {
-    private static readonly byte[] DomainKey = Encoding.ASCII.GetBytes("PersonalMessageSigningHash");
+    public static byte[] PersonalMessageHash(string message) => NK.PersonalMessage.Hash(message);
 
-    public static byte[] PersonalMessageHash(string message) =>
-        Blake2b.Hash256(Encoding.UTF8.GetBytes(message), DomainKey);
-
-    public static string AddressPrefix(string network) =>
+    public static NK.Network ToNetwork(string network) =>
         network.Trim().ToLowerInvariant() switch
         {
-            "mainnet" or "" => "kaspa",
-            "testnet" or "testnet-10" or "testnet-11" => "kaspatest",
-            "devnet" => "kaspadev",
-            "simnet" => "kaspasim",
+            "mainnet" or "" => NK.Network.Mainnet,
+            "testnet" or "testnet-10" or "testnet-11" => NK.Network.Testnet,
+            "devnet" => NK.Network.Devnet,
+            "simnet" => NK.Network.Simnet,
             _ => throw new ArgumentException($"Unknown Kaspa network '{network}'."),
         };
+
+    public static string AddressPrefix(string network) => ToNetwork(network).AddressPrefix;
 
     /// <summary>Decodes a 64-byte Schnorr signature from hex (128 chars) or base64.</summary>
     public static byte[]? DecodeSignature(string? signature)
@@ -54,11 +52,8 @@ public static class KaspaMessageSigner
     {
         if (xOnly.Length != 32 || digest.Length != 32 || sig.Length != 64)
             return false;
-        if (!ECXOnlyPubKey.TryCreate(xOnly, Context.Instance, out var pub) || pub is null)
-            return false;
-        if (!SecpSchnorrSignature.TryCreate(sig, out var schnorr) || schnorr is null)
-            return false;
-        return pub.SigVerifyBIP340(schnorr, digest);
+        try { return new NK.PubKey(xOnly).Verify(new SchnorrSignature(sig), digest); }
+        catch (Exception e) when (e is ArgumentException or FormatException or InvalidOperationException) { return false; }
     }
 
     /// <summary>
@@ -77,34 +72,34 @@ public static class KaspaMessageSigner
         byte[]? sig = DecodeSignature(signature);
         if (sig is null)
             return SignatureCheck.Fail("签名格式无效（需 64 字节 Schnorr 签名，hex 或 base64） / invalid signature encoding");
-        return VerifyDigest(info.Payload, PersonalMessageHash(message), sig)
-            ? SignatureCheck.Ok()
-            : SignatureCheck.Fail("签名验证失败 / signature does not match address");
+        bool ok;
+        try { ok = NK.PersonalMessage.VerifyMessage(new NK.PubKey(info.Payload), message, new SchnorrSignature(sig)); }
+        catch (Exception e) when (e is ArgumentException or FormatException or InvalidOperationException) { ok = false; }
+        return ok ? SignatureCheck.Ok() : SignatureCheck.Fail("签名验证失败 / signature does not match address");
     }
 
     /// <summary>Signs like rusty-kaspa sign_message (used by tests and tooling).</summary>
     public static byte[] Sign(string message, ReadOnlySpan<byte> privateKey32, byte[]? auxRand32 = null)
     {
-        if (!ECPrivKey.TryCreate(privateKey32, Context.Instance, out var key) || key is null)
-            throw new ArgumentException("Invalid private key.");
-        byte[] digest = PersonalMessageHash(message);
-        var sig = auxRand32 is { Length: 32 } ? key.SignBIP340(digest, new BIP340NonceFunction(auxRand32)) : key.SignBIP340(digest);
-        byte[] output = new byte[64];
-        sig.WriteToSpan(output);
-        return output;
+        using var key = CreateKey(privateKey32);
+        byte[] aux = auxRand32 is { Length: 32 } ? auxRand32 : System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+        return NK.PersonalMessage.SignMessage(key, message, aux).ToBytes();
     }
 
     public static byte[] XOnlyPublicKey(ReadOnlySpan<byte> privateKey32)
     {
-        if (!ECPrivKey.TryCreate(privateKey32, Context.Instance, out var key) || key is null)
-            throw new ArgumentException("Invalid private key.");
-        byte[] x = new byte[32];
-        key.CreateXOnlyPubKey().WriteToSpan(x);
-        return x;
+        using var key = CreateKey(privateKey32);
+        return key.PubKey.ToBytes();
     }
 
     public static string AddressFromXOnly(ReadOnlySpan<byte> xOnly, string network) =>
-        KaspaBech32.Encode(AddressPrefix(network), KaspaBech32.PubKeyVersion, xOnly);
+        new NK.PubKey(xOnly).GetAddress(ToNetwork(network)).ToString();
+
+    private static NK.Key CreateKey(ReadOnlySpan<byte> privateKey32)
+    {
+        try { return new NK.Key(privateKey32); }
+        catch (Exception e) when (e is ArgumentException or FormatException) { throw new ArgumentException("Invalid private key.", e); }
+    }
 }
 
 public sealed record SignatureCheck(bool Valid, string? Error)
